@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Dict, Any
 from fastapi import FastAPI, Request, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
@@ -35,8 +35,19 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("multi_bot_platform")
 
-# Active bots memory storage
+# Active bots memory storage (fallback/simulated)
 active_bots_db: Dict[str, Dict[str, Any]] = {}
+
+# Premium embedded frontend HTML code direct response to resolve Vercel 404 routing
+html_content = """... [embedded HTML source served at root /] ..."""
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_index(request: Request):
+    """
+    Serves the premium complete single-page application at the root route.
+    Resolves Vercel 404 static routing error.
+    """
+    return HTMLResponse(content=html_content, status_code=status.HTTP_200_OK)
 
 @app.get("/api/health")
 async def health_check():
@@ -63,7 +74,7 @@ async def launch_bot(payload: Dict[str, Any]):
             detail="Missing required fields: 'bot_token' and 'vercel_domain' are mandatory."
         )
         
-    # Clean the domain
+    # Clean the domain (strip protocol or trailing slashes if passed)
     clean_domain = vercel_domain.replace("https://", "").replace("http://", "").strip("/")
     webhook_url = f"https://{clean_domain}/api/webhook/{bot_token}/{bot_type}"
     
@@ -215,36 +226,36 @@ async def telegram_webhook(bot_token: str, bot_type: str, request: Request):
     if text.startswith("/start"):
         if bot_type == "welcome":
             response_text = (
-                "*Welcome to Support Bot*\\n\\n"
-                "Your automated welcoming system is fully active, running 24x7 on our serverless node with zero latency.\\n\\n"
+                "*Welcome to Support Bot*\\\\n\\\\n"
+                "Your automated welcoming system is fully active, running 24x7 on our serverless node with zero latency.\\\\n\\\\n"
                 "How can we assist you today? Please reply with your query."
             )
         elif bot_type == "feedback":
             response_text = (
-                "*Feedback and Contact Bot*\\n\\n"
+                "*Feedback and Contact Bot*\\\\n\\\\n"
                 "Your feedback is highly valuable to us. Please write your comments, suggestions, or queries below, and they will be forwarded immediately to the owner."
             )
         elif bot_type == "echo":
             response_text = (
-                "*Echo and Auto-Reply Bot*\\n\\n"
+                "*Echo and Auto-Reply Bot*\\\\n\\\\n"
                 "The echo engine is active. Any text or message you send to this bot will be automatically reflected back to you instantly."
             )
         else:
             response_text = (
-                "*System Active*\\n\\n"
+                "*System Active*\\\\n\\\\n"
                 "The webhook node is operational. Customize your handler code or choose a template."
             )
     else:
         if bot_type == "echo":
-            response_text = f"You said: \`{text}\`"
+            response_text = f"You said: \\\`{text}\\\`"
         elif bot_type == "feedback":
             response_text = (
-                "*Thank you for your feedback!*\\n\\n"
+                "*Thank you for your feedback!*\\\\n\\\\n"
                 "Your message has been received and securely forwarded. The administration team will review your comments as soon as possible."
             )
         elif bot_type == "welcome":
             response_text = (
-                "*Support Ticket Registered*\\n\\n"
+                "*Support Ticket Registered*\\\\n\\\\n"
                 "Thank you for contacting our customer support team. Your message has been logged under our active serverless node, and a representative will reply shortly."
             )
         else:
@@ -286,7 +297,7 @@ pydantic>=2.6.0
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
+      "src": "/(.*)",
       "dest": "api/index.py"
     }
   ]
