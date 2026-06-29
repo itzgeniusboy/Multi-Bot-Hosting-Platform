@@ -1,6 +1,8 @@
 {
   "name": "Multi-Bot Hosting Platform",
-  "description": "Premium 3D Dashboard to build, launch, and manage 24/7 serverless Telegram bots with an exportable FastAPI backend.",
+  "description": "A high-performance SaaS platform for serverless Telegram bot hosting, webhook routing, and real-time monitoring.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Bot, LogEntry } from './types';
 import ActiveBots from './components/ActiveBots';
 import LaunchForm from './components/LaunchForm';
@@ -10,16 +10,121 @@ import {
   Activity,
   Server,
   CloudLightning,
-  Menu,
-  X,
   BookOpen,
   Globe,
   Layers,
-  CheckCircle2,
-  AlertTriangle,
-  HelpCircle
+  ShieldCheck,
+  ArrowUpRight,
+  Database
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+// Circular Progress Meter Component with IntersectionObserver + requestAnimationFrame
+interface CircularProgressProps {
+  value: number;
+  max?: number;
+  label: string;
+  unit: string;
+  color: string;
+}
+
+function CircularProgress({ value, max = 100, label, unit, color }: CircularProgressProps) {
+  const [currentVal, setCurrentVal] = useState(0);
+  const elementRef = useRef<HTMLDivElement>(null);
+  const [hasAnimated, setHasAnimated] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasAnimated) {
+          setHasAnimated(true);
+          let start = 0;
+          const duration = 1200; // ms
+          const startTime = performance.now();
+
+          const animate = (timestamp: number) => {
+            const elapsed = timestamp - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easeProgress = progress * (2 - progress); // easeOutQuad
+            setCurrentVal(Math.round(easeProgress * value));
+
+            if (progress < 1) {
+              requestAnimationFrame(animate);
+            }
+          };
+
+          requestAnimationFrame(animate);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (elementRef.current) {
+      observer.observe(elementRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [value, hasAnimated]);
+
+  useEffect(() => {
+    if (hasAnimated) {
+      setCurrentVal(value);
+    }
+  }, [value]);
+
+  const radius = 45;
+  const strokeWidth = 5;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (currentVal / max) * circumference;
+
+  return (
+    <div ref={elementRef} className="premium-glass-card rounded-2xl p-6 flex flex-col items-center justify-center relative overflow-hidden">
+      <div className="absolute inset-0 card-grid-pattern opacity-5 pointer-events-none"></div>
+      
+      {/* Glow highlight */}
+      <div className="absolute top-0 left-1/4 w-1/2 h-px bg-gradient-to-r from-transparent via-[#00D4FF]/25 to-transparent"></div>
+
+      <div className="relative w-28 h-28 flex items-center justify-center">
+        {/* Decorative rotating ring */}
+        <div className="absolute inset-1.5 rounded-full border border-dashed border-[#00D4FF]/5 animate-rotate-slow"></div>
+        
+        <svg className="w-full h-full transform -rotate-90">
+          <circle
+            cx="56"
+            cy="56"
+            r={radius}
+            stroke="rgba(0, 212, 255, 0.03)"
+            strokeWidth={strokeWidth}
+            fill="transparent"
+          />
+          <circle
+            cx="56"
+            cy="56"
+            r={radius}
+            stroke={color}
+            strokeWidth={strokeWidth}
+            fill="transparent"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            style={{
+              filter: `drop-shadow(0 0 8px ${color}60)`,
+              transition: 'stroke-dashoffset 0.8s cubic-bezier(0.25, 1, 0.5, 1)'
+            }}
+          />
+        </svg>
+
+        <div className="absolute flex flex-col items-center justify-center">
+          <span className="text-xl font-mono font-bold text-[#F0F6FF]">{currentVal}{unit}</span>
+        </div>
+      </div>
+      
+      <span className="text-[10px] font-mono tracking-widest text-[#4A6080] uppercase mt-4 text-center">
+        {label}
+      </span>
+    </div>
+  );
+}
 
 const initialDemoBots: Bot[] = [
   {
@@ -77,10 +182,9 @@ export default function App() {
   const [selectedBotId, setSelectedBotId] = useState<string>('cyber_bot_1');
   const [logs, setLogs] = useState<LogEntry[]>(initialDemoLogs);
   const [activePanel, setActivePanel] = useState<'monitor' | 'code'>('monitor');
-  const [activeView, setActiveView] = useState<'dashboard' | 'how-to-use' | 'system-status'>('dashboard');
   const [isLaunching, setIsLaunching] = useState(false);
   const [totalRequests, setTotalRequests] = useState(4);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<'hero' | 'dashboard' | 'documentation' | 'status'>('hero');
 
   // System status mock telemetry data
   const [cpuUsage, setCpuUsage] = useState(12);
@@ -96,6 +200,49 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Scrollspy to update floating nav links
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollPos = window.scrollY + 250;
+      const sections = ['hero', 'dashboard', 'documentation', 'status'];
+      
+      for (const section of sections) {
+        const el = document.getElementById(section);
+        if (el) {
+          const top = el.offsetTop;
+          const height = el.offsetHeight;
+          if (scrollPos >= top && scrollPos < top + height) {
+            setActiveSection(section as any);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Intersection Observer for Scroll Reveal Fade
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('revealed');
+          }
+        });
+      },
+      { threshold: 0.05, rootMargin: '0px 0px -50px 0px' }
+    );
+
+    document.querySelectorAll('.scroll-reveal').forEach((el) => {
+      observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [bots]);
+
   const addLog = (
     level: 'INFO' | 'WARNING' | 'ERROR',
     botId: string,
@@ -109,15 +256,15 @@ export default function App() {
     const now = new Date();
     const timestamp = now.toTimeString().split(' ')[0];
     const newLog: LogEntry = {
-      id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       timestamp,
       level,
       botId,
       botUsername,
+      message,
       method,
       path,
       status_code,
-      message,
       payload_received: payload,
     };
     setLogs((prev) => [...prev, newLog]);
@@ -183,7 +330,7 @@ export default function App() {
         alert(errorMsg);
       }
     } catch (err: any) {
-      // Fallback local mockup for developers/sandbox previews
+      // Fallback local mockup connection
       const mockUsername = token === '827419365:AAH_CyberMindAssistant_DemoSecureKey' ? 'CyberMind_Vercel_Bot' : 'Autonomous_Telegram_Bot';
       const newBotId = `bot_${Date.now()}`;
       const newBot: Bot = {
@@ -399,7 +546,7 @@ export default function App() {
         `Compiled response delivered successfully via Telegram API. Action: ${resData.action || 'reply_sent'}`
       );
     } catch (e) {
-      // Local fallback logs if dev server hasn't mapped API perfectly yet
+      // Local fallback logs
       setTimeout(() => {
         addLog(
           'INFO',
@@ -414,411 +561,388 @@ export default function App() {
     }
   };
 
+  const handleSmoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
+    e.preventDefault();
+    const el = document.getElementById(targetId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#080612] text-slate-100 font-sans selection:bg-purple-500/30 selection:text-purple-200 overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#050B18] text-[#F0F6FF] font-sans overflow-x-hidden relative selection:bg-[#00D4FF]/30 selection:text-[#00D4FF]">
       
-      {/* Background Glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(168,85,247,0.08),rgba(8,6,18,0))] pointer-events-none z-0"></div>
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/15 to-transparent pointer-events-none"></div>
+      {/* Background Noise and Radial Atmosphere */}
+      <div className="noise-overlay" />
+      <div className="absolute top-0 right-0 w-[45%] h-[45%] bg-[radial-gradient(circle_at_center,rgba(0,212,255,0.08)_0%,transparent_70%)] pointer-events-none z-0"></div>
+      <div className="absolute bottom-0 left-0 w-[50%] h-[50%] bg-[radial-gradient(circle_at_center,rgba(124,58,237,0.06)_0%,transparent_70%)] pointer-events-none z-0"></div>
 
-      {/* Slideout Sidebar Menu Drawer */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.5 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSidebarOpen(false)}
-              className="fixed inset-0 bg-black z-40 cursor-pointer"
-            />
-            {/* Sidebar content */}
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 20, stiffness: 120 }}
-              className="fixed right-0 top-0 bottom-0 w-80 bg-slate-950 border-l border-slate-900 shadow-2xl p-6 z-50 overflow-y-auto flex flex-col justify-between"
+      {/* Floating Pill Navbar */}
+      <nav className="fixed top-6 left-1/2 -translate-x-1/2 floating-navbar px-6 py-3 rounded-full flex items-center justify-between gap-12 z-50 w-[90%] max-w-[1000px] shadow-2xl">
+        <div className="flex items-center gap-2.5">
+          <div className="relative w-8 h-8 flex items-center justify-center">
+            {/* Rotating inner ring */}
+            <div className="absolute inset-0 rounded-full border border-dashed border-[#00D4FF]/30 animate-rotate-slow"></div>
+            {/* Geometric hexagon logo */}
+            <svg className="w-5 h-5 text-[#00D4FF]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="12 2 22 7.5 22 18.5 12 24 2 18.5 2 7.5" />
+            </svg>
+          </div>
+          <span className="font-display font-bold text-xs tracking-widest text-[#F0F6FF] hidden sm:inline-block">
+            MULTI-BOT ENGINE
+          </span>
+        </div>
+
+        <div className="flex items-center gap-6 text-[11px] font-mono tracking-wider">
+          <a
+            href="#hero"
+            onClick={(e) => handleSmoothScroll(e, 'hero')}
+            className={`transition-all relative py-1 ${activeSection === 'hero' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
+          >
+            Start
+            {activeSection === 'hero' && (
+              <span className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-[#00D4FF]" />
+            )}
+          </a>
+          <a
+            href="#dashboard"
+            onClick={(e) => handleSmoothScroll(e, 'dashboard')}
+            className={`transition-all relative py-1 ${activeSection === 'dashboard' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
+          >
+            Dashboard
+            {activeSection === 'dashboard' && (
+              <span className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-[#00D4FF]" />
+            )}
+          </a>
+          <a
+            href="#documentation"
+            onClick={(e) => handleSmoothScroll(e, 'documentation')}
+            className={`transition-all relative py-1 ${activeSection === 'documentation' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
+          >
+            Documentation
+            {activeSection === 'documentation' && (
+              <span className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-[#00D4FF]" />
+            )}
+          </a>
+          <a
+            href="#status"
+            onClick={(e) => handleSmoothScroll(e, 'status')}
+            className={`transition-all relative py-1 ${activeSection === 'status' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
+          >
+            Telemetry
+            {activeSection === 'status' && (
+              <span className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-[#00D4FF]" />
+            )}
+          </a>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section id="hero" className="relative min-h-[95vh] flex items-center justify-center pt-32 pb-16 overflow-hidden">
+        {/* Animated Perspective grid tunnel inside Hero */}
+        <div className="perspective-container">
+          <div className="perspective-grid" />
+        </div>
+
+        {/* Floating Particles */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+          <div className="animated-particle w-1.5 h-1.5 top-[25%] left-[15%]" style={{ animationDelay: '0s', animationDuration: '18s' }} />
+          <div className="animated-particle w-2 h-2 top-[55%] left-[85%]" style={{ animationDelay: '4s', animationDuration: '24s' }} />
+          <div className="animated-particle w-1 h-1 top-[75%] left-[30%]" style={{ animationDelay: '2s', animationDuration: '20s' }} />
+          <div className="animated-particle w-2.5 h-2.5 top-[85%] left-[70%]" style={{ animationDelay: '6s', animationDuration: '28s' }} />
+        </div>
+
+        <div className="max-w-[1200px] w-full mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
+          {/* Hero left text block */}
+          <div className="lg:col-span-7 space-y-6 text-left">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#00D4FF]/10 border border-[#00D4FF]/20 rounded-full text-[10px] font-mono tracking-widest text-[#00D4FF]">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#00D4FF]" />
+              SECURE WEBHOOK INTEGRATION LAYER
+            </div>
+            
+            {/* Title with Layered Extrusion */}
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-display font-extrabold tracking-tight text-white leading-[1.1] neon-extrusion-text">
+              Multi-Bot <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4FF] to-[#7C3AED]">
+                Hosting Platform
+              </span>
+            </h1>
+
+            <p className="text-sm sm:text-base text-[#4A6080] max-w-xl font-sans leading-relaxed">
+              Dynamically route, configure, and simulate secure Telegram Bots in real-time. Mount robust serverless microservices with instant API synchronization and zero configuration latency.
+            </p>
+
+            <div className="flex flex-wrap gap-4 pt-4">
+              <a
+                href="#dashboard"
+                onClick={(e) => handleSmoothScroll(e, 'dashboard')}
+                className="px-6 py-3.5 rounded-xl bg-linear-to-r from-[#00D4FF] to-[#7C3AED] hover:scale-[1.03] transition-all text-xs font-bold font-sans uppercase tracking-wider text-white shadow-lg shadow-[#00D4FF]/25 flex items-center gap-2"
+              >
+                Launch dashboard
+                <ArrowUpRight className="w-4 h-4 text-white" />
+              </a>
+              <a
+                href="#documentation"
+                onClick={(e) => handleSmoothScroll(e, 'documentation')}
+                className="px-6 py-3.5 rounded-xl border border-[#00D4FF]/20 bg-[#0A1628]/40 hover:bg-[#0A1628]/80 transition-all text-xs font-bold font-sans uppercase tracking-wider text-[#F0F6FF]"
+              >
+                Read instructions
+              </a>
+            </div>
+          </div>
+
+          {/* Hero right floating Stat Cards block */}
+          <div className="lg:col-span-5 relative h-[380px] hidden lg:block">
+            {/* Card 1: Active Nodes */}
+            <div 
+              className="absolute top-[5%] left-[5%] w-[260px] premium-glass-card rounded-2xl p-5"
+              style={{ transform: 'perspective(600px) rotateX(10deg) rotateY(-8deg) translateZ(30px)' }}
             >
-              <div>
-                <div className="flex items-center justify-between pb-6 border-b border-slate-900 mb-6">
-                  <div className="flex items-center gap-2">
-                    <CloudLightning className="w-5 h-5 text-purple-400" />
-                    <span className="font-display font-bold text-white text-sm tracking-tight">System Navigation</span>
-                  </div>
-                  <button
-                    onClick={() => setSidebarOpen(false)}
-                    className="p-1.5 rounded-lg border border-slate-900 hover:bg-slate-900 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  <button
-                    onClick={() => {
-                      setActiveView('dashboard');
-                      setSidebarOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold tracking-wide transition-all text-left ${
-                      activeView === 'dashboard'
-                        ? 'bg-purple-950/40 text-purple-400 border border-purple-500/20'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-900/40'
-                    }`}
-                  >
-                    <Cpu className="w-4 h-4" />
-                    Dashboard Node Control
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setActiveView('how-to-use');
-                      setSidebarOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold tracking-wide transition-all text-left ${
-                      activeView === 'how-to-use'
-                        ? 'bg-purple-950/40 text-purple-400 border border-purple-500/20'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-900/40'
-                    }`}
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    How to Use (Documentation)
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setActiveView('dashboard');
-                      setSidebarOpen(false);
-                      setTimeout(() => {
-                        document.getElementById('active-nodes-heading')?.scrollIntoView({ behavior: 'smooth' });
-                      }, 200);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold tracking-wide text-slate-400 hover:text-white hover:bg-slate-900/40 transition-all text-left"
-                  >
-                    <Layers className="w-4 h-4" />
-                    Active Bots List
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setActiveView('system-status');
-                      setSidebarOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold tracking-wide transition-all text-left ${
-                      activeView === 'system-status'
-                        ? 'bg-purple-950/40 text-purple-400 border border-purple-500/20'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-900/40'
-                    }`}
-                  >
-                    <Activity className="w-4 h-4" />
-                    Live System Status
-                  </button>
-                </div>
+              <div className="flex items-center justify-between pb-3 border-b border-[#00D4FF]/10 mb-3">
+                <span className="text-[9px] font-mono text-[#00D4FF] uppercase tracking-wider">// PLATFORM STATUS</span>
+                <Server className="w-4 h-4 text-[#00D4FF]" />
               </div>
+              <p className="text-2xl font-display font-bold text-white">
+                {bots.filter((b) => b.status === 'online').length} / {bots.length}
+              </p>
+              <p className="text-[10px] text-[#4A6080] mt-1 font-sans">Active Serverless Nodes Online</p>
+            </div>
 
-              <div className="pt-6 border-t border-slate-900">
-                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
-                  <Globe className="w-3.5 h-3.5 text-purple-500" />
-                  <span>REGIONAL CLOUD INGRESS ROUTE</span>
-                </div>
+            {/* Card 2: Total Triggers */}
+            <div 
+              className="absolute top-[38%] left-[25%] w-[260px] premium-glass-card rounded-2xl p-5"
+              style={{ transform: 'perspective(600px) rotateX(8deg) rotateY(12deg) translateZ(40px)' }}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-[#00D4FF]/10 mb-3">
+                <span className="text-[9px] font-mono text-[#7C3AED] uppercase tracking-wider">// TRIGGER LOAD</span>
+                <Activity className="w-4 h-4 text-[#7C3AED]" />
               </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+              <p className="text-2xl font-display font-bold text-white">{totalRequests}</p>
+              <p className="text-[10px] text-[#4A6080] mt-1 font-sans">Gateway Events Routed</p>
+            </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
-        
-        {/* Header */}
-        <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-10 pb-8 border-b border-slate-900">
-          <div className="flex items-center gap-4">
-            <div className="relative flex-shrink-0">
-              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-purple-500 to-indigo-500 opacity-25 blur-md animate-pulse"></div>
-              <div className="relative w-14 h-14 rounded-2xl bg-slate-950 border border-slate-900 flex items-center justify-center overflow-hidden">
-                <div className="absolute inset-0 bg-linear-to-tr from-purple-500/10 to-transparent"></div>
-                <CloudLightning className="w-7 h-7 text-purple-400" />
-                <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping"></div>
+            {/* Card 3: Network Response */}
+            <div 
+              className="absolute top-[70%] left-[10%] w-[260px] premium-glass-card rounded-2xl p-5"
+              style={{ transform: 'perspective(600px) rotateX(-6deg) rotateY(-8deg) translateZ(20px)' }}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-[#00D4FF]/10 mb-3">
+                <span className="text-[9px] font-mono text-[#00FF87] uppercase tracking-wider">// EDGE RESPONSE</span>
+                <Cpu className="w-4 h-4 text-[#00FF87]" />
+              </div>
+              <p className="text-2xl font-display font-bold text-white">~78ms</p>
+              <p className="text-[10px] text-[#4A6080] mt-1 font-sans">Global Routing Latency</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Main Container */}
+      <div className="max-w-[1200px] mx-auto px-6 space-y-32 pb-24 relative z-10">
+
+        {/* Dashboard Node Control Section */}
+        <section id="dashboard" className="scroll-reveal pt-16">
+          <div className="flex items-center justify-between bg-[#0A1628]/60 border border-[#00D4FF]/10 rounded-xl p-2 mb-10 max-w-sm">
+            <button
+              onClick={() => setActivePanel('monitor')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold font-sans uppercase tracking-wider transition-all cursor-pointer ${
+                activePanel === 'monitor'
+                  ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/20'
+                  : 'text-[#4A6080] hover:text-[#F0F6FF]'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              Node console
+            </button>
+            <button
+              onClick={() => setActivePanel('code')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold font-sans uppercase tracking-wider transition-all cursor-pointer ${
+                activePanel === 'code'
+                  ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/20'
+                  : 'text-[#4A6080] hover:text-[#F0F6FF]'
+              }`}
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              Export backend
+            </button>
+          </div>
+
+          <AnimatePresence mode="wait">
+            {activePanel === 'monitor' ? (
+              <motion.div
+                key="monitor"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-12"
+              >
+                {/* Active Bots Webhook List */}
+                <ActiveBots
+                  bots={bots}
+                  selectedBotId={selectedBotId}
+                  onSelectBot={setSelectedBotId}
+                  onToggleStatus={handleToggleStatus}
+                  onDeleteBot={handleDeleteBot}
+                  onSendTestWebhook={handleTriggerWebhook}
+                />
+
+                {/* Provisioner Form */}
+                <LaunchForm onLaunch={handleLaunchBot} isLaunching={isLaunching} />
+
+                {/* Live Console Simulator Logs */}
+                <Simulator
+                  bots={bots}
+                  selectedBotId={selectedBotId}
+                  logs={logs}
+                  onClearLogs={() => setLogs([])}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="code"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.3 }}
+              >
+                <CodeExporter />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+
+        {/* How to Use Section */}
+        <section id="documentation" className="scroll-reveal pt-16">
+          <div>
+            <span className="text-[10px] font-mono tracking-wider text-[#00D4FF] uppercase">// DOCUMENTATION</span>
+            <h2 className="text-2xl font-display font-bold text-white tracking-tight flex items-center gap-2 mt-1">
+              <BookOpen className="w-5 h-5 text-[#00D4FF]" />
+              System Integration Flow
+            </h2>
+            <p className="text-xs text-[#4A6080] font-sans mt-1">
+              Follow these core steps to provision and coordinate your Telegram Webhook deployments.
+            </p>
+          </div>
+
+          <div className="relative grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
+            {/* Dashed moving connector line behind step cards */}
+            <div className="absolute top-1/2 left-0 right-0 h-1 hidden md:block -translate-y-8 pointer-events-none z-0">
+              <svg className="w-full h-2" fill="none">
+                <path d="M 0,4 L 1200,4" stroke="rgba(0, 212, 255, 0.15)" strokeWidth="2" strokeDasharray="8 6" className="animated-dash-path" />
+              </svg>
+            </div>
+            
+            {/* Step 1 */}
+            <div className="premium-glass-card rounded-2xl p-6 relative overflow-hidden min-h-[180px]">
+              <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-gradient-to-b from-[#00D4FF] to-[#7C3AED]" />
+              <div className="step-card-watermark">01</div>
+              <div className="relative z-10">
+                <span className="text-[9px] font-mono tracking-wider text-[#00D4FF] uppercase">// INITIALIZE</span>
+                <h3 className="font-display font-bold text-[#F0F6FF] text-base mt-2">Provision credentials</h3>
+                <p className="text-xs text-[#4A6080] font-sans mt-2 leading-relaxed">
+                  Start a private conversation with @BotFather on Telegram. Send /newbot to construct a bot identifier and acquire an HTTP API security token.
+                </p>
               </div>
             </div>
             
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-display font-extrabold tracking-tight text-white">
-                  Multi-Bot Hosting Platform
-                </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 font-mono">
-                  VERCEL SERVERLESS
-                </span>
+            {/* Step 2 */}
+            <div className="premium-glass-card rounded-2xl p-6 relative overflow-hidden min-h-[180px]">
+              <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-gradient-to-b from-[#00D4FF] to-[#7C3AED]" />
+              <div className="step-card-watermark">02</div>
+              <div className="relative z-10">
+                <span className="text-[9px] font-mono tracking-wider text-[#00D4FF] uppercase">// ROUTE</span>
+                <h3 className="font-display font-bold text-[#F0F6FF] text-base mt-2">Configure gateway</h3>
+                <p className="text-xs text-[#4A6080] font-sans mt-2 leading-relaxed">
+                  Insert your HTTP token block into our platform console. Choose a matching automation archetype and register the live routing tunnel.
+                </p>
               </div>
-              <p className="text-xs text-slate-400 mt-1">
-                Launch, route, and test highly scalable Telegram Bots with instant webhook setups.
-              </p>
+            </div>
+
+            {/* Step 3 */}
+            <div className="premium-glass-card rounded-2xl p-6 relative overflow-hidden min-h-[180px]">
+              <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-gradient-to-b from-[#00D4FF] to-[#7C3AED]" />
+              <div className="step-card-watermark">03</div>
+              <div className="relative z-10">
+                <span className="text-[9px] font-mono tracking-wider text-[#00D4FF] uppercase">// DEPLOY</span>
+                <h3 className="font-display font-bold text-[#F0F6FF] text-base mt-2">Scale and monitor</h3>
+                <p className="text-xs text-[#4A6080] font-sans mt-2 leading-relaxed">
+                  Test your setup using the inline payload triggers. Monitor logs and download the source code files to deploy permanently to Vercel.
+                </p>
+              </div>
             </div>
           </div>
+        </section>
 
-          <div className="flex items-center gap-4">
-            {/* Quick Metrics Bar */}
-            <div className="flex items-center gap-6 bg-slate-950 border border-slate-900 p-4 rounded-2xl shadow-xl shadow-slate-950/20">
-              <div className="text-center md:text-left pr-4 border-r border-slate-900">
-                <span className="block text-[10px] text-slate-500 font-mono uppercase tracking-wider">Active Nodes</span>
-                <span className="text-base font-display font-bold text-white mt-0.5 block flex items-center gap-1.5">
-                  <Server className="w-3.5 h-3.5 text-purple-400" />
-                  {bots.filter((b) => b.status === 'online').length} / {bots.length}
-                </span>
-              </div>
-              <div className="text-center md:text-left">
-                <span className="block text-[10px] text-slate-500 font-mono uppercase tracking-wider">Total Triggers</span>
-                <span className="text-base font-display font-bold text-white mt-0.5 block flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                  {totalRequests}
-                </span>
-              </div>
-            </div>
-
-            {/* Hamburger icon for Hidden Sidebar */}
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-3 bg-slate-950 hover:bg-slate-900 border border-slate-900 rounded-2xl shadow-xl hover:scale-102 transition-all text-slate-300 hover:text-white cursor-pointer"
-              title="System Navigation Menu"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
+        {/* System Telemetry Section */}
+        <section id="status" className="scroll-reveal pt-16">
+          <div>
+            <span className="text-[10px] font-mono tracking-wider text-[#00D4FF] uppercase">// METRICS</span>
+            <h2 className="text-2xl font-display font-bold text-white tracking-tight flex items-center gap-2 mt-1">
+              <Activity className="w-5 h-5 text-[#00D4FF]" />
+              Edge Core Telemetry
+            </h2>
+            <p className="text-xs text-[#4A6080] font-sans mt-1">
+              Real-time resource performance metrics tracked at the serverless edge node.
+            </p>
           </div>
-        </header>
 
-        {/* View Selection (Toggles between Dashboard, How to use, System status) */}
-        {activeView === 'dashboard' && (
-          <>
-            {/* Workspace Navigation Tabs */}
-            <div className="flex items-center justify-between bg-slate-950 border border-slate-900 rounded-xl p-1.5 mb-8 max-w-md">
-              <button
-                onClick={() => setActivePanel('monitor')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                  activePanel === 'monitor'
-                    ? 'bg-purple-950/40 text-purple-400 border border-purple-500/30 font-semibold shadow-lg shadow-purple-500/10'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Activity className="w-3.5 h-3.5" />
-                Control Console
-              </button>
-              <button
-                onClick={() => setActivePanel('code')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                  activePanel === 'code'
-                    ? 'bg-purple-950/40 text-purple-400 border border-purple-500/30 font-semibold shadow-lg shadow-purple-500/10'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Terminal className="w-3.5 h-3.5" />
-                Export Python Backend
-              </button>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
+            <CircularProgress
+              value={cpuUsage}
+              max={100}
+              label="CPU utilization"
+              unit="%"
+              color="#00D4FF"
+            />
+            <CircularProgress
+              value={memoryUsage}
+              max={100}
+              label="Allocated memory"
+              unit="%"
+              color="#7C3AED"
+            />
+            <CircularProgress
+              value={responseTime}
+              max={150}
+              label="Average latency"
+              unit="ms"
+              color="#00FF87"
+            />
+          </div>
 
-            {/* Central Workspace */}
-            <div className="relative">
-              <AnimatePresence mode="wait">
-                {activePanel === 'monitor' ? (
-                  <motion.div
-                    key="monitor"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.25 }}
-                    className="space-y-8"
-                  >
-                    {/* Active Bots Dashboard Grid */}
-                    <div id="active-nodes-heading">
-                      <ActiveBots
-                        bots={bots}
-                        selectedBotId={selectedBotId}
-                        onSelectBot={setSelectedBotId}
-                        onToggleStatus={handleToggleStatus}
-                        onDeleteBot={handleDeleteBot}
-                        onSendTestWebhook={handleTriggerWebhook}
-                      />
-                    </div>
-
-                    {/* Provisioner Form */}
-                    <LaunchForm onLaunch={handleLaunchBot} isLaunching={isLaunching} />
-
-                    {/* Live Console Logs */}
-                    <div className="pt-4">
-                      <div className="border-t border-slate-900 pt-8">
-                        <Simulator
-                          bots={bots}
-                          selectedBotId={selectedBotId}
-                          logs={logs}
-                          onClearLogs={() => setLogs([])}
-                        />
-                      </div>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="code"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.25 }}
-                  >
-                    <CodeExporter />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </>
-        )}
-
-        {/* How to Use Section */}
-        {activeView === 'how-to-use' && (
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass-panel rounded-2xl border border-slate-900 p-8 max-w-4xl mx-auto space-y-6"
-          >
-            <div className="flex items-center gap-3 border-b border-slate-900 pb-4">
-              <BookOpen className="w-6 h-6 text-purple-400" />
-              <h2 className="text-xl font-display font-bold text-white">How to Set Up & Deploy Your Telegram Bots</h2>
-            </div>
-
-            <div className="space-y-6 text-sm text-slate-300 leading-relaxed">
-              <div className="space-y-2">
-                <h3 className="font-semibold text-white flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-purple-500/10 border border-purple-500/30 text-[10px] text-purple-400 flex items-center justify-center font-mono">1</span>
-                  Acquire Telegram Bot Token from @BotFather
-                </h3>
-                <p className="pl-7 text-xs text-slate-400">
-                  Open the Telegram messenger app, search for the official account <strong>@BotFather</strong>, and start a conversation. Send the command <code className="font-mono bg-slate-950 px-1.5 py-0.5 rounded text-purple-400 border border-slate-900">/newbot</code>. Follow the prompts to configure a name and username. BotFather will provide an HTTP API token.
-                </p>
+          {/* Router endpoint states */}
+          <div className="bg-[#0A1628]/40 border border-[#00D4FF]/10 rounded-2xl p-6 mt-8 relative overflow-hidden">
+            <div className="absolute inset-0 card-grid-pattern opacity-5"></div>
+            <h3 className="font-display font-bold text-xs text-[#F0F6FF] tracking-wider uppercase mb-4 flex items-center gap-2">
+              <Database className="w-4 h-4 text-[#00D4FF]" />
+              Gateway API Route Configuration
+            </h3>
+            
+            <div className="space-y-3 font-mono text-[11px] relative z-10">
+              <div className="flex items-center justify-between py-2 border-b border-[#00D4FF]/5">
+                <span className="text-[#4A6080]">GET /api/health</span>
+                <span className="text-[#00FF87]">200 OK</span>
               </div>
-
-              <div className="space-y-2">
-                <h3 className="font-semibold text-white flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-purple-500/10 border border-purple-500/30 text-[10px] text-purple-400 flex items-center justify-center font-mono">2</span>
-                  Register Webhook and Choose Template
-                </h3>
-                <p className="pl-7 text-xs text-slate-400">
-                  Paste the generated token into our "Connect and Launch Bot" panel. Select the matching bot behavior archetype (Support, Feedback, or Echo template) and click "Launch Bot Node". Our server will immediately connect to Telegram APIs, verify the credentials, and route updates to our serverless edge node.
-                </p>
+              <div className="flex items-center justify-between py-2 border-b border-[#00D4FF]/5">
+                <span className="text-[#4A6080]">POST /api/launch</span>
+                <span className="text-[#00FF87]">200 OK</span>
               </div>
-
-              <div className="space-y-2">
-                <h3 className="font-semibold text-white flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-purple-500/10 border border-purple-500/30 text-[10px] text-purple-400 flex items-center justify-center font-mono">3</span>
-                  Deploy to Vercel Serverless
-                </h3>
-                <p className="pl-7 text-xs text-slate-400">
-                  To host your own version independently, head over to the "Export Python Backend" tab. Copy the fully compliant FastAPI python source code, your requirements list, and vercel deployment configuration. Push these to a GitHub repository, import into Vercel, and watch it run 100% free with unlimited scale.
-                </p>
+              <div className="flex items-center justify-between py-2 border-b border-[#00D4FF]/5">
+                <span className="text-[#4A6080]">POST /api/stop</span>
+                <span className="text-[#00FF87]">200 OK</span>
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-[#4A6080]">POST /api/webhook/&#123;bot_token&#125;/&#123;bot_type&#125;</span>
+                <span className="text-[#00FF87]">200 OK</span>
               </div>
             </div>
+          </div>
+        </section>
 
-            <div className="pt-6 border-t border-slate-900 flex justify-end">
-              <button
-                onClick={() => setActiveView('dashboard')}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-xl text-xs font-semibold text-white cursor-pointer transition-all shadow-lg shadow-purple-500/25"
-              >
-                Back to Dashboard
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* System Status Section */}
-        {activeView === 'system-status' && (
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6 max-w-4xl mx-auto"
-          >
-            <div className="glass-panel rounded-2xl border border-slate-900 p-8 space-y-6">
-              <div className="flex items-center gap-3 border-b border-slate-900 pb-4">
-                <Activity className="w-6 h-6 text-purple-400" />
-                <h2 className="text-xl font-display font-bold text-white">Live System Status & Telemetry</h2>
-              </div>
-
-              {/* Status Indicator Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-slate-950 border border-slate-900 rounded-xl p-5">
-                  <span className="text-[10px] text-slate-500 font-mono block mb-1">CPU UTILIZATION</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-mono font-bold text-white">{cpuUsage}%</span>
-                    <span className="text-[10px] font-mono text-purple-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> NORMAL
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-900 h-1.5 rounded-full mt-3 overflow-hidden">
-                    <div className="bg-purple-500 h-full transition-all duration-1000" style={{ width: `${cpuUsage * 3}%` }}></div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-950 border border-slate-900 rounded-xl p-5">
-                  <span className="text-[10px] text-slate-500 font-mono block mb-1">MEMORY POOL STATE</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-mono font-bold text-white">{memoryUsage}%</span>
-                    <span className="text-[10px] font-mono text-purple-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> ALLOCATED
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-900 h-1.5 rounded-full mt-3 overflow-hidden">
-                    <div className="bg-purple-500 h-full transition-all duration-1000" style={{ width: `${memoryUsage}%` }}></div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-950 border border-slate-900 rounded-xl p-5">
-                  <span className="text-[10px] text-slate-500 font-mono block mb-1">AVERAGE RESPONSE TIME</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-mono font-bold text-white">{responseTime}ms</span>
-                    <span className="text-[10px] font-mono text-purple-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> EXCELLENT
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-900 h-1.5 rounded-full mt-3 overflow-hidden">
-                    <div className="bg-purple-500 h-full transition-all duration-1000" style={{ width: `${responseTime / 2}%` }}></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Server State List */}
-              <div className="bg-slate-950 border border-slate-900 rounded-xl p-5 space-y-4">
-                <h3 className="font-display font-semibold text-xs text-slate-300">FastAPI Gateway Routers</h3>
-                <div className="space-y-3 font-mono text-xs">
-                  <div className="flex items-center justify-between py-2 border-b border-slate-900/60">
-                    <span className="text-slate-500">GET /api/health</span>
-                    <span className="text-purple-400">STATUS: 200 OK</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b border-slate-900/60">
-                    <span className="text-slate-500">POST /api/launch</span>
-                    <span className="text-purple-400">STATUS: 200 OK</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b border-slate-900/60">
-                    <span className="text-slate-500">POST /api/stop</span>
-                    <span className="text-purple-400">STATUS: 200 OK</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-slate-500">POST /api/webhook/{"{"}bot_token{"}"}/{"{"}bot_type{"}"}</span>
-                    <span className="text-purple-400">STATUS: 200 OK</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={() => setActiveView('dashboard')}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-xl text-xs font-semibold text-white cursor-pointer transition-all shadow-lg shadow-purple-500/25"
-              >
-                Back to Dashboard
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Footer */}
-        <footer className="mt-16 pt-8 border-t border-slate-900 text-center text-[11px] text-slate-500">
-          <p>© 2026 Multi-Bot Hosting Platform • Crafted using FastAPI & React.</p>
+        {/* Minimalist Footer */}
+        <footer className="pt-8 border-t border-[#00D4FF]/10 text-center text-[10px] font-mono text-[#4A6080]">
+          <p>Multi-Bot Hosting Platform  —  Built on FastAPI & Vercel  —  2026</p>
         </footer>
       </div>
     </div>

@@ -226,23 +226,23 @@ async def telegram_webhook(bot_token: str, bot_type: str, request: Request):
     if text.startswith("/start"):
         if bot_type == "welcome":
             response_text = (
-                "*Welcome to Support Bot*\\\\n\\\\n"
-                "Your automated welcoming system is fully active, running 24x7 on our serverless node with zero latency.\\\\n\\\\n"
+                "*Welcome to Support Bot*\\n\\n"
+                "Your automated welcoming system is fully active, running 24x7 on our serverless node with zero latency.\\n\\n"
                 "How can we assist you today? Please reply with your query."
             )
         elif bot_type == "feedback":
             response_text = (
-                "*Feedback and Contact Bot*\\\\n\\\\n"
+                "*Feedback and Contact Bot*\\n\\n"
                 "Your feedback is highly valuable to us. Please write your comments, suggestions, or queries below, and they will be forwarded immediately to the owner."
             )
         elif bot_type == "echo":
             response_text = (
-                "*Echo and Auto-Reply Bot*\\\\n\\\\n"
+                "*Echo and Auto-Reply Bot*\\n\\n"
                 "The echo engine is active. Any text or message you send to this bot will be automatically reflected back to you instantly."
             )
         else:
             response_text = (
-                "*System Active*\\\\n\\\\n"
+                "*System Active*\\n\\n"
                 "The webhook node is operational. Customize your handler code or choose a template."
             )
     else:
@@ -250,12 +250,12 @@ async def telegram_webhook(bot_token: str, bot_type: str, request: Request):
             response_text = f"You said: \\\`{text}\\\`"
         elif bot_type == "feedback":
             response_text = (
-                "*Thank you for your feedback!*\\\\n\\\\n"
+                "*Thank you for your feedback!*\\n\\n"
                 "Your message has been received and securely forwarded. The administration team will review your comments as soon as possible."
             )
         elif bot_type == "welcome":
             response_text = (
-                "*Support Ticket Registered*\\\\n\\\\n"
+                "*Support Ticket Registered*\\n\\n"
                 "Thank you for contacting our customer support team. Your message has been logged under our active serverless node, and a representative will reply shortly."
             )
         else:
@@ -334,74 +334,74 @@ pydantic>=2.6.0
 
   return (
     <div className="flex flex-col w-full">
-      {/* Code Viewer Panel */}
-      <div className="flex flex-col">
+      <span className="text-[10px] font-mono tracking-wider text-[#00D4FF] uppercase">// EXPORT BLUEPRINTS</span>
+      <div className="flex flex-col mt-4">
         {/* Navigation Tabs */}
-        <div className="flex items-center justify-between border-b border-slate-900 pb-3 mb-5">
-          <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#00D4FF]/10 pb-4 mb-6 gap-4">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setActiveTab('py')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono transition-all cursor-pointer ${
                 activeTab === 'py'
-                  ? 'bg-purple-950/40 text-purple-400 border border-purple-500/30 font-semibold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                  ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/20 font-semibold'
+                  : 'text-[#4A6080] hover:text-[#F0F6FF] hover:bg-[#0A1628]/40'
               }`}
             >
-              <FileCode className="w-3.5 h-3.5 text-purple-400" />
+              <FileCode className="w-4 h-4 text-[#00D4FF]" />
               api/index.py
             </button>
             <button
               onClick={() => setActiveTab('req')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono transition-all cursor-pointer ${
                 activeTab === 'req'
-                  ? 'bg-purple-950/40 text-purple-400 border border-purple-500/30 font-semibold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                  ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/20 font-semibold'
+                  : 'text-[#4A6080] hover:text-[#F0F6FF] hover:bg-[#0A1628]/40'
               }`}
             >
-              <HardDrive className="w-3.5 h-3.5 text-amber-400" />
+              <HardDrive className="w-4 h-4 text-amber-400" />
               requirements.txt
             </button>
             <button
               onClick={() => setActiveTab('json')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono transition-all cursor-pointer ${
                 activeTab === 'json'
-                  ? 'bg-purple-950/40 text-purple-400 border border-purple-500/30 font-semibold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                  ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/20 font-semibold'
+                  : 'text-[#4A6080] hover:text-[#F0F6FF] hover:bg-[#0A1628]/40'
               }`}
             >
-              <Cpu className="w-3.5 h-3.5 text-rose-400" />
+              <Cpu className="w-4 h-4 text-[#7C3AED]" />
               vercel.json
             </button>
           </div>
 
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-900 hover:bg-slate-900 text-xs text-slate-300 font-mono cursor-pointer transition-colors"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-[#00D4FF]/10 hover:bg-[#0A1628] text-xs text-[#F0F6FF] font-mono cursor-pointer transition-colors"
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5 text-purple-400" />
-                <span className="text-purple-400">Copied!</span>
+                <Check className="w-4 h-4 text-[#00FF87]" />
+                <span className="text-[#00FF87]">Copied</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5 text-slate-400" />
-                <span>Copy Code</span>
+                <Copy className="w-4 h-4 text-[#00D4FF]" />
+                <span>Copy</span>
               </>
             )}
           </button>
         </div>
 
-        {/* Code Block Window */}
-        <div className="relative bg-slate-950 rounded-2xl border border-slate-900 shadow-2xl p-4 overflow-hidden flex-1 max-h-[550px] overflow-y-auto">
+        {/* Code Block Window with terminal aesthetic */}
+        <div className="relative bg-[#030812] rounded-2xl border border-[#00D4FF]/10 shadow-2xl p-5 overflow-hidden flex-1 max-h-[500px] overflow-y-auto">
           {/* File Label Header */}
-          <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pb-2 border-b border-slate-900 mb-3 select-none">
+          <div className="flex items-center justify-between text-[10px] font-mono text-[#4A6080] pb-3 border-b border-[#00D4FF]/5 mb-4 select-none">
             <span>FILE: {getFileName()}</span>
-            <span>UTF-8 • UNIX • PYTHON/JSON</span>
+            <span>UTF-8 • UNIX • SYNTAX HIGHLIGHT READY</span>
           </div>
 
           {/* Styled Code */}
-          <pre className="font-mono text-xs text-slate-300 leading-relaxed overflow-x-auto whitespace-pre">
+          <pre className="font-mono text-xs text-[#F0F6FF] leading-relaxed overflow-x-auto whitespace-pre">
             <code>{getCodeString()}</code>
           </pre>
         </div>
