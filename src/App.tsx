@@ -300,18 +300,23 @@ export default function App() {
     audio.playClick();
     try {
       const response = await fetch('/api/login');
-      if (!response.ok) throw new Error('Failed to fetch authorization URL');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || errData.message || 'Failed to fetch authorization URL from server.');
+      }
       const data = await response.json();
       if (data.url) {
         // Open GitHub OAuth URL directly in popup
         const popup = window.open(data.url, 'github_oauth_popup', 'width=600,height=700');
         if (!popup) {
-          alert('Popup blocked! Please allow popups to authorize your GitHub account.');
+          throw new Error('Popup blocked! Please allow popups for this site, or open the app in a new tab to continue.');
         }
+      } else {
+        throw new Error('Authentication endpoint did not return a valid redirection URL.');
       }
     } catch (e: any) {
       console.error('GitHub OAuth redirect construct error:', e);
-      alert('Failed to connect GitHub: ' + e.message);
+      throw e;
     }
   };
 
@@ -807,23 +812,6 @@ export default function App() {
           transition={{ duration: 0.8 }}
           className="min-h-screen bg-[#050B18] text-[#F0F6FF] font-sans overflow-x-hidden relative selection:bg-[#00D4FF]/30 selection:text-[#00D4FF]"
         >
-          {/* Stale Session/Inherited Token Warning Banner */}
-          <div className="bg-[#FF3B6B]/15 border-b border-[#FF3B6B]/25 px-6 py-4 relative z-[100] flex flex-col md:flex-row items-center justify-center gap-4 text-xs font-sans text-center">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#FF3B6B] animate-ping flex-shrink-0"></span>
-              <span className="text-[#FF3B6B] font-mono font-bold tracking-wider uppercase text-[10px] bg-[#FF3B6B]/10 px-2 py-0.5 rounded border border-[#FF3B6B]/20">STALE SESSION DETECTED</span>
-            </div>
-            <span className="text-[#B0C4DE] max-w-2xl leading-relaxed">
-              Your browser automatically loaded a cached GitHub token from another app on this port. Clear it to test the brand-new login page!
-            </span>
-            <button
-              onClick={handleDisconnectGitHub}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#FF3B6B] to-[#7C3AED] hover:from-[#FF5E89] hover:to-[#8B5CF6] text-white font-sans font-bold text-xs uppercase tracking-wider cursor-pointer shadow-[0_0_20px_rgba(255,59,107,0.35)] transition-all hover:scale-[1.02]"
-            >
-              Clear Session & Show Login Page 🤯
-            </button>
-          </div>
-
           {/* Custom Animated Interactive Cursor */}
           <CustomCursor />
 
@@ -940,10 +928,22 @@ export default function App() {
                 className="lg:col-span-7 space-y-8 text-left"
               >
                 {/* Visual login test banner */}
-                <div className="p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 text-cyan-300 text-xs font-mono flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div className={`p-4 rounded-xl border text-xs font-mono flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${
+                  githubToken === 'demo_sandbox_token_2026'
+                    ? 'border-[#00D4FF]/30 bg-[#00D4FF]/5 text-[#00D4FF]'
+                    : 'border-cyan-500/20 bg-cyan-500/5 text-cyan-300'
+                }`}>
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                    <span><strong>SESSION STATUS:</strong> Authenticated with GitHub.</span>
+                    <span className={`w-2 h-2 rounded-full animate-pulse ${
+                      githubToken === 'demo_sandbox_token_2026' ? 'bg-[#00D4FF]' : 'bg-cyan-400'
+                    }`}></span>
+                    <span>
+                      {githubToken === 'demo_sandbox_token_2026' ? (
+                        <><strong>SESSION STATUS:</strong> Interactive Sandbox Demo Mode active (No setup required!)</>
+                      ) : (
+                        <><strong>SESSION STATUS:</strong> Authenticated with GitHub.</>
+                      )}
+                    </span>
                   </div>
                   <button
                     type="button"

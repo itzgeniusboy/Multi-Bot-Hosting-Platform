@@ -21,6 +21,21 @@ export default function LoginScreen({
   const [pat, setPat] = useState('');
   const [error, setError] = useState('');
   const [isValidating, setIsValidating] = useState(false);
+  const [isOAuthLoading, setIsOAuthLoading] = useState(false);
+
+  const handleOAuthClick = async () => {
+    audio.playClick();
+    setError('');
+    setIsOAuthLoading(true);
+    try {
+      await onConnectGitHub();
+    } catch (err: any) {
+      console.error('OAuth initiation error:', err);
+      setError(err.message || 'Failed to initiate GitHub OAuth.');
+    } finally {
+      setIsOAuthLoading(false);
+    }
+  };
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,6 +56,16 @@ export default function LoginScreen({
 
     setIsValidating(true);
     try {
+      if (trimmedPat.startsWith('demo_')) {
+        // Mock validation for demo/sandbox tokens
+        setTimeout(() => {
+          audio.playSuccess();
+          onSaveManualToken(trimmedPat);
+          setIsValidating(false);
+        }, 800);
+        return;
+      }
+
       // Direct API call to GitHub to validate token credentials
       const response = await fetch('https://api.github.com/user', {
         headers: {
@@ -238,12 +263,47 @@ export default function LoginScreen({
                       </p>
                     </div>
 
+                    {error && (
+                      <p className="text-[10px] text-[#FF3B6B] bg-rose-950/15 border border-[#FF3B6B]/25 py-2.5 px-3 rounded-lg flex items-start gap-2 font-sans">
+                        <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>{error}</span>
+                      </p>
+                    )}
+
                     <button
-                      onClick={onConnectGitHub}
-                      className="w-full py-4 rounded-xl text-xs font-bold font-sans uppercase tracking-wider bg-gradient-to-r from-[#00D4FF] to-[#7C3AED] hover:from-[#00E5FF] hover:to-[#8B5CF6] text-white flex items-center justify-center gap-2 shadow-lg shadow-[#00D4FF]/15 cursor-pointer hover:scale-[1.01] transition-all"
+                      onClick={handleOAuthClick}
+                      disabled={isOAuthLoading}
+                      className="w-full py-4 rounded-xl text-xs font-bold font-sans uppercase tracking-wider bg-gradient-to-r from-[#00D4FF] to-[#7C3AED] hover:from-[#00E5FF] hover:to-[#8B5CF6] text-white flex items-center justify-center gap-2 shadow-lg shadow-[#00D4FF]/15 cursor-pointer hover:scale-[1.01] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Github className="w-4 h-4" />
-                      Continue with GitHub OAuth
+                      {isOAuthLoading ? (
+                        <>
+                          <span className="spinning-arc-loader"></span>
+                          INITIATING HANDSHAKE...
+                        </>
+                      ) : (
+                        <>
+                          <Github className="w-4 h-4" />
+                          Continue with GitHub OAuth
+                        </>
+                      )}
+                    </button>
+
+                    <div className="relative flex py-2 items-center">
+                      <div className="flex-grow border-t border-slate-800/40"></div>
+                      <span className="flex-shrink mx-4 text-[9px] font-mono text-[#4A6080] uppercase tracking-wider">OR</span>
+                      <div className="flex-grow border-t border-slate-800/40"></div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        audio.playSuccess();
+                        onSaveManualToken('demo_sandbox_token_2026');
+                      }}
+                      className="w-full py-3.5 rounded-xl text-xs font-bold font-sans uppercase tracking-wider bg-[#0C192E]/60 border border-[#00D4FF]/25 hover:border-[#00D4FF]/50 text-[#00D4FF] flex items-center justify-center gap-2 hover:bg-[#0E223F] hover:scale-[1.01] transition-all cursor-pointer shadow-[0_0_15px_rgba(0,212,255,0.05)]"
+                    >
+                      <Sparkles className="w-4 h-4 text-[#00D4FF] animate-pulse" />
+                      Launch Sandbox Demo Mode
                     </button>
                   </motion.div>
                 ) : (
