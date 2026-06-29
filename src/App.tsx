@@ -5,6 +5,7 @@ import LaunchForm from './components/LaunchForm';
 import Simulator from './components/Simulator';
 import CodeExporter from './components/CodeExporter';
 import OAuthCallback from './components/OAuthCallback';
+import LoginScreen from './components/LoginScreen';
 import {
   Cpu,
   Terminal,
@@ -790,6 +791,14 @@ export default function App() {
     <AnimatePresence mode="wait">
       {isLoading ? (
         <LoadingScreen key="loader" onComplete={() => setIsLoading(false)} />
+      ) : !githubToken ? (
+        <LoginScreen
+          key="login"
+          onConnectGitHub={handleConnectGitHub}
+          onSaveManualToken={handleSaveManualToken}
+          isMuted={isMuted}
+          onToggleMute={handleToggleMute}
+        />
       ) : (
         <motion.div 
           key="main"
@@ -880,6 +889,15 @@ export default function App() {
                 title={isMuted ? "Unmute sounds" : "Mute sounds"}
               >
                 {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              </button>
+
+              {/* Sign Out button */}
+              <button
+                onClick={handleDisconnectGitHub}
+                className="transition-all px-3 py-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 cursor-pointer text-[10px] font-mono tracking-wider"
+                title="Disconnect your GitHub account and return to login page"
+              >
+                Sign Out
               </button>
             </div>
           </nav>
