@@ -807,6 +807,23 @@ export default function App() {
           transition={{ duration: 0.8 }}
           className="min-h-screen bg-[#050B18] text-[#F0F6FF] font-sans overflow-x-hidden relative selection:bg-[#00D4FF]/30 selection:text-[#00D4FF]"
         >
+          {/* Stale Session/Inherited Token Warning Banner */}
+          <div className="bg-[#FF3B6B]/15 border-b border-[#FF3B6B]/25 px-6 py-4 relative z-[100] flex flex-col md:flex-row items-center justify-center gap-4 text-xs font-sans text-center">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#FF3B6B] animate-ping flex-shrink-0"></span>
+              <span className="text-[#FF3B6B] font-mono font-bold tracking-wider uppercase text-[10px] bg-[#FF3B6B]/10 px-2 py-0.5 rounded border border-[#FF3B6B]/20">STALE SESSION DETECTED</span>
+            </div>
+            <span className="text-[#B0C4DE] max-w-2xl leading-relaxed">
+              Your browser automatically loaded a cached GitHub token from another app on this port. Clear it to test the brand-new login page!
+            </span>
+            <button
+              onClick={handleDisconnectGitHub}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#FF3B6B] to-[#7C3AED] hover:from-[#FF5E89] hover:to-[#8B5CF6] text-white font-sans font-bold text-xs uppercase tracking-wider cursor-pointer shadow-[0_0_20px_rgba(255,59,107,0.35)] transition-all hover:scale-[1.02]"
+            >
+              Clear Session & Show Login Page 🤯
+            </button>
+          </div>
+
           {/* Custom Animated Interactive Cursor */}
           <CustomCursor />
 
