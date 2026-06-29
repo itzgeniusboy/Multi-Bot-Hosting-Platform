@@ -4,6 +4,7 @@ import ActiveBots from './components/ActiveBots';
 import LaunchForm from './components/LaunchForm';
 import Simulator from './components/Simulator';
 import CodeExporter from './components/CodeExporter';
+import OAuthCallback from './components/OAuthCallback';
 import {
   Cpu,
   Terminal,
@@ -226,6 +227,10 @@ const initialDemoLogs: LogEntry[] = [
 ];
 
 export default function App() {
+  if (window.location.pathname === '/callback') {
+    return <OAuthCallback />;
+  }
+
   const [isLoading, setIsLoading] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -237,6 +242,11 @@ export default function App() {
   const [isLaunching, setIsLaunching] = useState(false);
   const [totalRequests, setTotalRequests] = useState(4);
   const [activeSection, setActiveSection] = useState<'hero' | 'dashboard' | 'documentation' | 'status'>('hero');
+
+  // GitHub SaaS OAuth & Repos states
+  const [githubToken, setGithubToken] = useState<string | null>(localStorage.getItem('github_token'));
+  const [repos, setRepos] = useState<any[]>([]);
+  const [isFetchingRepos, setIsFetchingRepos] = useState(false);
 
   // System status mock telemetry data
   const [cpuUsage, setCpuUsage] = useState(12);
@@ -280,6 +290,98 @@ export default function App() {
       setResponseTime(Math.floor(Math.random() * 20) + 75);
     }, 4000);
     return () => clearInterval(interval);
+  }, []);
+
+  // =========================================================================
+  // GITHUB SAAS OAUTH & REGISTRATION HANDLERS
+  // =========================================================================
+  const handleConnectGitHub = async () => {
+    audio.playClick();
+    try {
+      const response = await fetch('/api/login');
+      if (!response.ok) throw new Error('Failed to fetch authorization URL');
+      const data = await response.json();
+      if (data.url) {
+        // Open GitHub OAuth URL directly in popup
+        const popup = window.open(data.url, 'github_oauth_popup', 'width=600,height=700');
+        if (!popup) {
+          alert('Popup blocked! Please allow popups to authorize your GitHub account.');
+        }
+      }
+    } catch (e: any) {
+      console.error('GitHub OAuth redirect construct error:', e);
+      alert('Failed to connect GitHub: ' + e.message);
+    }
+  };
+
+  const handleDisconnectGitHub = () => {
+    audio.playClick();
+    localStorage.removeItem('github_token');
+    setGithubToken(null);
+    setRepos([]);
+  };
+
+  const handleSaveManualToken = (token: string) => {
+    localStorage.setItem('github_token', token);
+    setGithubToken(token);
+    handleFetchRepos(token);
+  };
+
+  const handleFetchRepos = async (tokenToUse?: string) => {
+    const token = tokenToUse || githubToken;
+    if (!token) return;
+    setIsFetchingRepos(true);
+    try {
+      const response = await fetch(`/api/repos?token=${token}`);
+      if (response.ok) {
+        const data = await response.json();
+        setRepos(data);
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        console.error('Error fetching repos:', errData);
+      }
+    } catch (e) {
+      console.error('Failed to fetch repositories:', e);
+    } finally {
+      setIsFetchingRepos(false);
+    }
+  };
+
+  // Sync repos on mount if token exists
+  useEffect(() => {
+    if (githubToken) {
+      handleFetchRepos(githubToken);
+    }
+  }, [githubToken]);
+
+  // Listen for OAuth success messaging from callback popup
+  useEffect(() => {
+    const handleOAuthMessage = (event: MessageEvent) => {
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && !origin.includes('0.0.0.0') && !origin.includes('127.0.0.1')) {
+        return;
+      }
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.token) {
+        const token = event.data.token;
+        localStorage.setItem('github_token', token);
+        setGithubToken(token);
+        handleFetchRepos(token);
+      }
+    };
+    window.addEventListener('message', handleOAuthMessage);
+    return () => window.removeEventListener('message', handleOAuthMessage);
+  }, []);
+
+  // Check URL query parameters for fallback redirect OAuth token exchange
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    if (token) {
+      localStorage.setItem('github_token', token);
+      setGithubToken(token);
+      handleFetchRepos(token);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
 
   // Scrollspy to update floating nav links
@@ -354,10 +456,8 @@ export default function App() {
     setLogs((prev) => [...prev, newLog]);
   };
 
-  const handleLaunchBot = async (token: string, type: string) => {
+  const handleLaunchBot = async (repoName: string, token: string, scriptName: string) => {
     setIsLaunching(true);
-    const domain = window.location.host;
-
     try {
       const response = await fetch('/api/launch', {
         method: 'POST',
@@ -365,9 +465,10 @@ export default function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          repo_name: repoName,
           bot_token: token,
-          bot_type: type,
-          vercel_domain: domain,
+          script_name: scriptName,
+          github_token: githubToken,
         }),
       });
 
@@ -380,8 +481,8 @@ export default function App() {
           id: newBotId,
           username: botUsername,
           token: token,
-          vercelDomain: domain,
-          behavior: type,
+          vercelDomain: repoName, // Store selected repo fullName
+          behavior: scriptName,
           status: 'online',
           created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
           request_count: 0,
@@ -397,13 +498,13 @@ export default function App() {
           'POST',
           '/api/launch',
           200,
-          data.message || `Success! @${botUsername} is now live 24x7!`,
-          JSON.stringify(data.telegram_response, null, 2)
+          data.message || `Success! 24x7 bot action runner deployed to repository ${repoName}!`,
+          JSON.stringify(data, null, 2)
         );
         audio.playSuccess();
         window.dispatchEvent(new Event('test-webhook-triggered'));
       } else {
-        const errorMsg = data.message || 'Failed to connect bot webhook.';
+        const errorMsg = data.message || data.detail || 'Failed to connect bot webhook.';
         addLog(
           'ERROR',
           'failed_launch',
@@ -423,8 +524,8 @@ export default function App() {
         id: newBotId,
         username: mockUsername,
         token: token,
-        vercelDomain: domain,
-        behavior: type,
+        vercelDomain: repoName,
+        behavior: scriptName,
         status: 'online',
         created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
         request_count: 0,
@@ -440,7 +541,7 @@ export default function App() {
         'POST',
         '/api/launch',
         200,
-        `Success! @${mockUsername} is now live 24x7! (Simulated Preview Mode)`,
+        `Success! @${mockUsername} is live! (Simulation Mode)`,
         JSON.stringify({ ok: true, result: { username: mockUsername }, description: "Set webhook successful via mockup connection" }, null, 2)
       );
       audio.playSuccess();
@@ -468,17 +569,21 @@ export default function App() {
         'POST',
         `/api/stop`,
         200,
-        `De-registering webhook endpoint on Telegram servers for @${targetBot.username}...`
+        `Cancelling active GitHub Actions workflow runs for repository ${targetBot.vercelDomain}...`
       );
 
       try {
-        await fetch('/api/stop', {
+        const response = await fetch('/api/stop', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ bot_token: targetBot.token }),
+          body: JSON.stringify({
+            repo_name: targetBot.vercelDomain,
+            github_token: githubToken,
+          }),
         });
+        const data = await response.json();
 
         addLog(
           'INFO',
@@ -487,7 +592,7 @@ export default function App() {
           'POST',
           `/api/stop`,
           200,
-          `Successfully stopped webhook node. Status updated to Stopped.`
+          data.message || `Successfully stopped runner runs. Status offline.`
         );
       } catch (err) {
         addLog(
@@ -497,7 +602,7 @@ export default function App() {
           'POST',
           `/api/stop`,
           200,
-          `Deactivation signal delivered. Webhook state offline.`
+          `Stop signal delivered. Daemon runs stopped.`
         );
       }
     } else {
@@ -508,7 +613,7 @@ export default function App() {
         'POST',
         `/api/launch`,
         200,
-        `Re-launching webhook listener for @${targetBot.username}...`
+        `Re-dispatching workflow listener for @${targetBot.username}...`
       );
 
       try {
@@ -518,9 +623,10 @@ export default function App() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            repo_name: targetBot.vercelDomain,
             bot_token: targetBot.token,
-            bot_type: targetBot.behavior,
-            vercel_domain: targetBot.vercelDomain
+            script_name: targetBot.behavior,
+            github_token: githubToken,
           }),
         });
       } catch (err) {
@@ -540,7 +646,7 @@ export default function App() {
       'DELETE',
       '/api/launch',
       200,
-      `Teardown webhook trigger received. Removing @${targetBot.username} from active nodes.`
+      `Teardown workflow triggers received. Stopping active Actions runs and deleting node from list.`
     );
 
     try {
@@ -549,7 +655,10 @@ export default function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ bot_token: targetBot.token }),
+        body: JSON.stringify({
+          repo_name: targetBot.vercelDomain,
+          github_token: githubToken,
+        }),
       });
     } catch (e) {
       // Ignored
@@ -627,15 +736,27 @@ export default function App() {
       });
       const resData = await response.json();
 
-      addLog(
-        'INFO',
-        bot.id,
-        bot.username,
-        'POST',
-        `/api/webhook?token=${bot.token.substring(0, 6)}...&type=${bot.behavior}`,
-        200,
-        `Compiled response delivered successfully via Telegram API. Action: ${resData.action || 'reply_sent'}`
-      );
+      if (resData.status === 'partial_error') {
+        addLog(
+          'WARNING',
+          bot.id,
+          bot.username,
+          'POST',
+          `/api/webhook?token=${bot.token.substring(0, 6)}...&type=${bot.behavior}`,
+          200,
+          `Simulation Successful: Webhook processed! However, Telegram API failed to deliver the message because of a mock/fake Chat ID (947265). To see it work, open your real Telegram app, search @${bot.username}, and send /start!`
+        );
+      } else {
+        addLog(
+          'INFO',
+          bot.id,
+          bot.username,
+          'POST',
+          `/api/webhook?token=${bot.token.substring(0, 6)}...&type=${bot.behavior}`,
+          200,
+          `Compiled response delivered successfully via Telegram API. Action: ${resData.action || 'reply_sent'}`
+        );
+      }
     } catch (e) {
       // Local fallback logs
       setTimeout(() => {
@@ -937,7 +1058,17 @@ export default function App() {
                     />
 
                     {/* Provisioner Form */}
-                    <LaunchForm onLaunch={handleLaunchBot} isLaunching={isLaunching} />
+                    <LaunchForm
+                      githubToken={githubToken}
+                      onConnectGitHub={handleConnectGitHub}
+                      onDisconnectGitHub={handleDisconnectGitHub}
+                      onSaveManualToken={handleSaveManualToken}
+                      repos={repos}
+                      isFetchingRepos={isFetchingRepos}
+                      onFetchRepos={() => handleFetchRepos()}
+                      onLaunch={handleLaunchBot}
+                      isLaunching={isLaunching}
+                    />
 
                     {/* Live Console Simulator Logs */}
                     <Simulator
