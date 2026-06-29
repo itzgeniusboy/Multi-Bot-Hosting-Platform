@@ -840,11 +840,11 @@ export default function App() {
               </span>
             </div>
 
-            <div className="flex items-center gap-6 text-[11px] font-mono tracking-wider">
+            <div className="flex items-center gap-3 sm:gap-6 text-[11px] font-mono tracking-wider">
               <a
                 href="#hero"
                 onClick={(e) => handleSmoothScroll(e, 'hero')}
-                className={`transition-all relative py-1 ${activeSection === 'hero' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
+                className={`transition-all relative py-1 hidden md:inline-block ${activeSection === 'hero' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
               >
                 Start
                 {activeSection === 'hero' && (
@@ -854,7 +854,7 @@ export default function App() {
               <a
                 href="#dashboard"
                 onClick={(e) => handleSmoothScroll(e, 'dashboard')}
-                className={`transition-all relative py-1 ${activeSection === 'dashboard' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
+                className={`transition-all relative py-1 hidden md:inline-block ${activeSection === 'dashboard' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
               >
                 Dashboard
                 {activeSection === 'dashboard' && (
@@ -864,7 +864,7 @@ export default function App() {
               <a
                 href="#documentation"
                 onClick={(e) => handleSmoothScroll(e, 'documentation')}
-                className={`transition-all relative py-1 ${activeSection === 'documentation' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
+                className={`transition-all relative py-1 hidden md:inline-block ${activeSection === 'documentation' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
               >
                 Documentation
                 {activeSection === 'documentation' && (
@@ -874,7 +874,7 @@ export default function App() {
               <a
                 href="#status"
                 onClick={(e) => handleSmoothScroll(e, 'status')}
-                className={`transition-all relative py-1 ${activeSection === 'status' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
+                className={`transition-all relative py-1 hidden md:inline-block ${activeSection === 'status' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
               >
                 Telemetry
                 {activeSection === 'status' && (
@@ -922,6 +922,21 @@ export default function App() {
                 transition={{ duration: 0.8, delay: 0.1 }}
                 className="lg:col-span-7 space-y-8 text-left"
               >
+                {/* Visual login test banner */}
+                <div className="p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 text-cyan-300 text-xs font-mono flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <span><strong>SESSION STATUS:</strong> Authenticated with GitHub.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDisconnectGitHub}
+                    className="px-3.5 py-1.5 rounded-lg bg-[#FF3B6B]/15 hover:bg-[#FF3B6B]/25 text-[#FF3B6B] border border-[#FF3B6B]/30 transition-all font-sans font-bold text-[11px] cursor-pointer"
+                  >
+                    Sign Out / View Login Screen
+                  </button>
+                </div>
+
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#00D4FF]/8 border border-[#00D4FF]/15 rounded-full text-[10px] font-mono tracking-widest text-[#00D4FF] shadow-[0_0_15px_rgba(0,212,255,0.06)]">
                   <ShieldCheck className="w-3.5 h-3.5 text-[#00D4FF]" />
                   SECURE WEBHOOK INTEGRATION LAYER
