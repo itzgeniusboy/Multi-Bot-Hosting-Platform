@@ -1,26 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, LogEntry } from './types';
-import ActiveBots from './components/ActiveBots';
-import LaunchForm from './components/LaunchForm';
-import Simulator from './components/Simulator';
-import CodeExporter from './components/CodeExporter';
 import OAuthCallback from './components/OAuthCallback';
 import LoginScreen from './components/LoginScreen';
 import {
   Cpu,
-  Terminal,
-  Activity,
   Server,
-  CloudLightning,
-  BookOpen,
-  Globe,
-  Layers,
   ShieldCheck,
-  ArrowUpRight,
-  Database,
   Volume2,
   VolumeX,
-  Sparkles,
   Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -176,83 +162,19 @@ function CircularProgress({ value, max = 100, label, unit, color }: CircularProg
   );
 }
 
-const initialDemoBots: Bot[] = [
-  {
-    id: 'cyber_bot_1',
-    username: 'CyberMind_Vercel_Bot',
-    token: '827419365:AAH_CyberMindAssistant_DemoSecureKey',
-    vercelDomain: 'tele-hoster-demo.vercel.app',
-    behavior: 'welcome',
-    status: 'online',
-    created_at: '2026-06-29 11:30:15',
-    request_count: 4,
-    last_request_time: '2026-06-29 11:34:02',
-  }
-];
-
-const initialDemoLogs: LogEntry[] = [
-  {
-    id: 'l1',
-    timestamp: '11:30:15',
-    level: 'INFO',
-    botId: 'cyber_bot_1',
-    botUsername: 'CyberMind_Vercel_Bot',
-    message: 'Application startup complete. FastAPI running on port 3000',
-    method: 'STARTUP',
-    path: '-',
-    status_code: 200,
-  },
-  {
-    id: 'l2',
-    timestamp: '11:30:18',
-    level: 'INFO',
-    botId: 'cyber_bot_1',
-    botUsername: 'CyberMind_Vercel_Bot',
-    message: 'Webhook registration request received. Setting webhook url on Telegram servers',
-    method: 'POST',
-    path: '/api/launch',
-    status_code: 200,
-  },
-  {
-    id: 'l3',
-    timestamp: '11:30:19',
-    level: 'INFO',
-    botId: 'cyber_bot_1',
-    botUsername: 'CyberMind_Vercel_Bot',
-    message: 'Telegram setWebhook API call successful. Webhook registered!',
-    method: 'POST',
-    path: '/api/launch',
-    status_code: 200,
-    payload_received: JSON.stringify({ ok: true, result: true, description: "Webhook was set" }, null, 2),
-  }
-];
-
 export default function App() {
-  if (window.location.pathname === '/callback') {
-    return <OAuthCallback />;
-  }
-
   const [isLoading, setIsLoading] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
-  const [bots, setBots] = useState<Bot[]>(initialDemoBots);
-  const [selectedBotId, setSelectedBotId] = useState<string>('cyber_bot_1');
-  const [logs, setLogs] = useState<LogEntry[]>(initialDemoLogs);
-  const [activePanel, setActivePanel] = useState<'monitor' | 'code'>('monitor');
-  const [isLaunching, setIsLaunching] = useState(false);
-  const [totalRequests, setTotalRequests] = useState(4);
-  const [activeSection, setActiveSection] = useState<'hero' | 'dashboard' | 'documentation' | 'status'>('hero');
-
   // GitHub SaaS OAuth & Repos states
   const [githubToken, setGithubToken] = useState<string | null>(localStorage.getItem('github_token'));
-  const [repos, setRepos] = useState<any[]>([]);
-  const [isFetchingRepos, setIsFetchingRepos] = useState(false);
 
   // System status mock telemetry data
   const [cpuUsage, setCpuUsage] = useState(12);
   const [memoryUsage, setMemoryUsage] = useState(44);
   const [responseTime, setResponseTime] = useState(82);
+  const [totalRequests, setTotalRequests] = useState(1482);
 
   // Initialize Lenis Smooth Scroll
   useEffect(() => {
@@ -289,6 +211,7 @@ export default function App() {
       setCpuUsage(Math.floor(Math.random() * 8) + 8);
       setMemoryUsage(Math.floor(Math.random() * 3) + 42);
       setResponseTime(Math.floor(Math.random() * 20) + 75);
+      setTotalRequests((prev) => prev + Math.floor(Math.random() * 2) + 1);
     }, 4000);
     return () => clearInterval(interval);
   }, []);
@@ -324,41 +247,12 @@ export default function App() {
     audio.playClick();
     localStorage.removeItem('github_token');
     setGithubToken(null);
-    setRepos([]);
   };
 
   const handleSaveManualToken = (token: string) => {
     localStorage.setItem('github_token', token);
     setGithubToken(token);
-    handleFetchRepos(token);
   };
-
-  const handleFetchRepos = async (tokenToUse?: string) => {
-    const token = tokenToUse || githubToken;
-    if (!token) return;
-    setIsFetchingRepos(true);
-    try {
-      const response = await fetch(`/api/repos?token=${token}`);
-      if (response.ok) {
-        const data = await response.json();
-        setRepos(data);
-      } else {
-        const errData = await response.json().catch(() => ({}));
-        console.error('Error fetching repos:', errData);
-      }
-    } catch (e) {
-      console.error('Failed to fetch repositories:', e);
-    } finally {
-      setIsFetchingRepos(false);
-    }
-  };
-
-  // Sync repos on mount if token exists
-  useEffect(() => {
-    if (githubToken) {
-      handleFetchRepos(githubToken);
-    }
-  }, [githubToken]);
 
   // Listen for OAuth success messaging from callback popup
   useEffect(() => {
@@ -371,7 +265,6 @@ export default function App() {
         const token = event.data.token;
         localStorage.setItem('github_token', token);
         setGithubToken(token);
-        handleFetchRepos(token);
       }
     };
     window.addEventListener('message', handleOAuthMessage);
@@ -385,411 +278,18 @@ export default function App() {
     if (token) {
       localStorage.setItem('github_token', token);
       setGithubToken(token);
-      handleFetchRepos(token);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
-  // Scrollspy to update floating nav links
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollPos = window.scrollY + 250;
-      const sections = ['hero', 'dashboard', 'documentation', 'status'];
-      
-      for (const section of sections) {
-        const el = document.getElementById(section);
-        if (el) {
-          const top = el.offsetTop;
-          const height = el.offsetHeight;
-          if (scrollPos >= top && scrollPos < top + height) {
-            setActiveSection(section as any);
-            break;
-          }
-        }
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Intersection Observer for Scroll Reveal Fade
-  useEffect(() => {
-    if (isLoading) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('revealed');
-          }
-        });
-      },
-      { threshold: 0.05, rootMargin: '0px 0px -50px 0px' }
-    );
-
-    document.querySelectorAll('.scroll-reveal').forEach((el) => {
-      observer.observe(el);
-    });
-
-    return () => observer.disconnect();
-  }, [bots, isLoading]);
-
-  const addLog = (
-    level: 'INFO' | 'WARNING' | 'ERROR',
-    botId: string,
-    botUsername: string,
-    method: string,
-    path: string,
-    status_code: number,
-    message: string,
-    payload?: string
-  ) => {
-    const now = new Date();
-    const timestamp = now.toTimeString().split(' ')[0];
-    const newLog: LogEntry = {
-      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      timestamp,
-      level,
-      botId,
-      botUsername,
-      message,
-      method,
-      path,
-      status_code,
-      payload_received: payload,
-    };
-    setLogs((prev) => [...prev, newLog]);
-  };
-
-  const handleLaunchBot = async (repoName: string, token: string, scriptName: string) => {
-    setIsLaunching(true);
-    try {
-      const response = await fetch('/api/launch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          repo_name: repoName,
-          bot_token: token,
-          script_name: scriptName,
-          github_token: githubToken,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        const botUsername = data.username || 'DetectedBot';
-        const newBotId = `bot_${Date.now()}`;
-        const newBot: Bot = {
-          id: newBotId,
-          username: botUsername,
-          token: token,
-          vercelDomain: repoName, // Store selected repo fullName
-          behavior: scriptName,
-          status: 'online',
-          created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          request_count: 0,
-        };
-
-        setBots((prev) => [...prev, newBot]);
-        setSelectedBotId(newBotId);
-
-        addLog(
-          'INFO',
-          newBotId,
-          botUsername,
-          'POST',
-          '/api/launch',
-          200,
-          data.message || `Success! 24x7 bot action runner deployed to repository ${repoName}!`,
-          JSON.stringify(data, null, 2)
-        );
-        audio.playSuccess();
-        window.dispatchEvent(new Event('test-webhook-triggered'));
-      } else {
-        const errorMsg = data.message || data.detail || 'Failed to connect bot webhook.';
-        addLog(
-          'ERROR',
-          'failed_launch',
-          'System',
-          'POST',
-          '/api/launch',
-          response.status || 400,
-          `Error: ${errorMsg}`
-        );
-        alert(errorMsg);
-      }
-    } catch (err: any) {
-      // Fallback local mockup connection
-      const mockUsername = token === '827419365:AAH_CyberMindAssistant_DemoSecureKey' ? 'CyberMind_Vercel_Bot' : 'Autonomous_Telegram_Bot';
-      const newBotId = `bot_${Date.now()}`;
-      const newBot: Bot = {
-        id: newBotId,
-        username: mockUsername,
-        token: token,
-        vercelDomain: repoName,
-        behavior: scriptName,
-        status: 'online',
-        created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-        request_count: 0,
-      };
-
-      setBots((prev) => [...prev, newBot]);
-      setSelectedBotId(newBotId);
-
-      addLog(
-        'INFO',
-        newBotId,
-        mockUsername,
-        'POST',
-        '/api/launch',
-        200,
-        `Success! @${mockUsername} is live! (Simulation Mode)`,
-        JSON.stringify({ ok: true, result: { username: mockUsername }, description: "Set webhook successful via mockup connection" }, null, 2)
-      );
-      audio.playSuccess();
-      window.dispatchEvent(new Event('test-webhook-triggered'));
-    } finally {
-      setIsLaunching(false);
-    }
-  };
-
-  const handleToggleStatus = async (botId: string) => {
-    const targetBot = bots.find((b) => b.id === botId);
-    if (!targetBot) return;
-
-    const newStatus = targetBot.status === 'online' ? 'offline' : 'online';
-
-    setBots((prev) =>
-      prev.map((b) => (b.id === botId ? { ...b, status: newStatus } : b))
-    );
-
-    if (newStatus === 'offline') {
-      addLog(
-        'WARNING',
-        botId,
-        targetBot.username,
-        'POST',
-        `/api/stop`,
-        200,
-        `Cancelling active GitHub Actions workflow runs for repository ${targetBot.vercelDomain}...`
-      );
-
-      try {
-        const response = await fetch('/api/stop', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            repo_name: targetBot.vercelDomain,
-            github_token: githubToken,
-          }),
-        });
-        const data = await response.json();
-
-        addLog(
-          'INFO',
-          botId,
-          targetBot.username,
-          'POST',
-          `/api/stop`,
-          200,
-          data.message || `Successfully stopped runner runs. Status offline.`
-        );
-      } catch (err) {
-        addLog(
-          'WARNING',
-          botId,
-          targetBot.username,
-          'POST',
-          `/api/stop`,
-          200,
-          `Stop signal delivered. Daemon runs stopped.`
-        );
-      }
-    } else {
-      addLog(
-        'INFO',
-        botId,
-        targetBot.username,
-        'POST',
-        `/api/launch`,
-        200,
-        `Re-dispatching workflow listener for @${targetBot.username}...`
-      );
-
-      try {
-        await fetch('/api/launch', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            repo_name: targetBot.vercelDomain,
-            bot_token: targetBot.token,
-            script_name: targetBot.behavior,
-            github_token: githubToken,
-          }),
-        });
-      } catch (err) {
-        // Log pass
-      }
-    }
-  };
-
-  const handleDeleteBot = async (botId: string) => {
-    const targetBot = bots.find((b) => b.id === botId);
-    if (!targetBot) return;
-
-    addLog(
-      'WARNING',
-      botId,
-      targetBot.username,
-      'DELETE',
-      '/api/launch',
-      200,
-      `Teardown workflow triggers received. Stopping active Actions runs and deleting node from list.`
-    );
-
-    try {
-      await fetch('/api/stop', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          repo_name: targetBot.vercelDomain,
-          github_token: githubToken,
-        }),
-      });
-    } catch (e) {
-      // Ignored
-    }
-
-    setBots((prev) => prev.filter((b) => b.id !== botId));
-    
-    if (selectedBotId === botId) {
-      const remaining = bots.filter((b) => b.id !== botId);
-      if (remaining.length > 0) {
-        setSelectedBotId(remaining[0].id);
-      } else {
-        setSelectedBotId('');
-      }
-    }
-  };
-
-  const handleTriggerWebhook = async (bot: Bot, text: string) => {
-    setSelectedBotId(bot.id);
-    
-    setBots((prev) =>
-      prev.map((b) =>
-        b.id === bot.id
-          ? {
-              ...b,
-              request_count: b.request_count + 1,
-              last_request_time: new Date().toISOString().replace('T', ' ').substring(0, 19),
-            }
-          : b
-      )
-    );
-    setTotalRequests((prev) => prev + 1);
-
-    // Trigger visual pulse in the Three.js 3D core
-    window.dispatchEvent(new Event('test-webhook-triggered'));
-
-    const mockTelegramUpdate = {
-      update_id: Math.floor(Math.random() * 10000000),
-      message: {
-        message_id: Math.floor(Math.random() * 10000),
-        from: {
-          id: 58273957,
-          is_bot: false,
-          first_name: "Tester",
-          username: "telegram_user"
-        },
-        chat: {
-          id: 947265,
-          first_name: "Tester",
-          type: "private"
-        },
-        date: Math.floor(Date.now() / 1000),
-        text: text
-      }
-    };
-
-    addLog(
-      'INFO',
-      bot.id,
-      bot.username,
-      'POST',
-      `/api/webhook?token=${bot.token.substring(0, 6)}...&type=${bot.behavior}`,
-      200,
-      `Incoming Telegram Update. Message: "${text}"`,
-      JSON.stringify(mockTelegramUpdate, null, 2)
-    );
-
-    try {
-      const response = await fetch(`/api/webhook?token=${bot.token}&type=${bot.behavior}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(mockTelegramUpdate),
-      });
-      const resData = await response.json();
-
-      if (resData.status === 'partial_error') {
-        addLog(
-          'WARNING',
-          bot.id,
-          bot.username,
-          'POST',
-          `/api/webhook?token=${bot.token.substring(0, 6)}...&type=${bot.behavior}`,
-          200,
-          `Simulation Successful: Webhook processed! However, Telegram API failed to deliver the message because of a mock/fake Chat ID (947265). To see it work, open your real Telegram app, search @${bot.username}, and send /start!`
-        );
-      } else {
-        addLog(
-          'INFO',
-          bot.id,
-          bot.username,
-          'POST',
-          `/api/webhook?token=${bot.token.substring(0, 6)}...&type=${bot.behavior}`,
-          200,
-          `Compiled response delivered successfully via Telegram API. Action: ${resData.action || 'reply_sent'}`
-        );
-      }
-    } catch (e) {
-      // Local fallback logs
-      setTimeout(() => {
-        addLog(
-          'INFO',
-          bot.id,
-          bot.username,
-          'POST',
-          `/api/webhook?token=${bot.token.substring(0, 6)}...&type=${bot.behavior}`,
-          200,
-          `Compiled support ticket reply dispatched to client socket.`
-        );
-      }, 500);
-    }
-  };
-
-  const handleSmoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
-    e.preventDefault();
-    const el = document.getElementById(targetId);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
   const handleToggleMute = () => {
     const status = audio.toggleMute();
     setIsMuted(status);
+  };
+
+  const handleTriggerSparkle = () => {
+    audio.playSuccess();
+    window.dispatchEvent(new Event('test-webhook-triggered'));
   };
 
   return (
@@ -846,47 +346,6 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-3 sm:gap-6 text-[11px] font-mono tracking-wider">
-              <a
-                href="#hero"
-                onClick={(e) => handleSmoothScroll(e, 'hero')}
-                className={`transition-all relative py-1 hidden md:inline-block ${activeSection === 'hero' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
-              >
-                Start
-                {activeSection === 'hero' && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-[#00D4FF]" />
-                )}
-              </a>
-              <a
-                href="#dashboard"
-                onClick={(e) => handleSmoothScroll(e, 'dashboard')}
-                className={`transition-all relative py-1 hidden md:inline-block ${activeSection === 'dashboard' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
-              >
-                Dashboard
-                {activeSection === 'dashboard' && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-[#00D4FF]" />
-                )}
-              </a>
-              <a
-                href="#documentation"
-                onClick={(e) => handleSmoothScroll(e, 'documentation')}
-                className={`transition-all relative py-1 hidden md:inline-block ${activeSection === 'documentation' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
-              >
-                Documentation
-                {activeSection === 'documentation' && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-[#00D4FF]" />
-                )}
-              </a>
-              <a
-                href="#status"
-                onClick={(e) => handleSmoothScroll(e, 'status')}
-                className={`transition-all relative py-1 hidden md:inline-block ${activeSection === 'status' ? 'text-[#00D4FF]' : 'text-[#4A6080] hover:text-[#F0F6FF]'}`}
-              >
-                Telemetry
-                {activeSection === 'status' && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-[#00D4FF]" />
-                )}
-              </a>
-
               {/* Mute button */}
               <button 
                 onClick={handleToggleMute}
@@ -928,21 +387,11 @@ export default function App() {
                 className="lg:col-span-7 space-y-8 text-left"
               >
                 {/* Visual login test banner */}
-                <div className={`p-4 rounded-xl border text-xs font-mono flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${
-                  githubToken === 'demo_sandbox_token_2026'
-                    ? 'border-[#00D4FF]/30 bg-[#00D4FF]/5 text-[#00D4FF]'
-                    : 'border-cyan-500/20 bg-cyan-500/5 text-cyan-300'
-                }`}>
+                <div className="p-4 rounded-xl border text-xs font-mono flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-cyan-500/20 bg-cyan-500/5 text-cyan-300">
                   <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full animate-pulse ${
-                      githubToken === 'demo_sandbox_token_2026' ? 'bg-[#00D4FF]' : 'bg-cyan-400'
-                    }`}></span>
+                    <span className="w-2 h-2 rounded-full animate-pulse bg-cyan-400"></span>
                     <span>
-                      {githubToken === 'demo_sandbox_token_2026' ? (
-                        <><strong>SESSION STATUS:</strong> Interactive Sandbox Demo Mode active (No setup required!)</>
-                      ) : (
-                        <><strong>SESSION STATUS:</strong> Authenticated with GitHub.</>
-                      )}
+                      <strong>SESSION STATUS:</strong> Authenticated with GitHub.
                     </span>
                   </div>
                   <button
@@ -972,21 +421,16 @@ export default function App() {
                 </p>
 
                 <div className="flex flex-wrap gap-4 pt-4">
-                  <a
-                    href="#dashboard"
-                    onClick={(e) => handleSmoothScroll(e, 'dashboard')}
-                    className="px-7 py-4 rounded-xl bg-gradient-to-r from-[#00D4FF] to-[#7C3AED] hover:scale-[1.03] active:scale-[0.98] transition-all text-xs font-bold font-sans uppercase tracking-wider text-white shadow-lg shadow-[#00D4FF]/25 flex items-center gap-2 magnetic-btn"
+                  <button
+                    onClick={handleTriggerSparkle}
+                    className="px-7 py-4 rounded-xl bg-gradient-to-r from-[#00D4FF] to-[#7C3AED] hover:scale-[1.03] active:scale-[0.98] transition-all text-xs font-bold font-sans uppercase tracking-wider text-white shadow-lg shadow-[#00D4FF]/25 flex items-center gap-2 magnetic-btn cursor-pointer"
                   >
-                    Launch dashboard
-                    <ArrowUpRight className="w-4 h-4 text-white" />
-                  </a>
-                  <a
-                    href="#documentation"
-                    onClick={(e) => handleSmoothScroll(e, 'documentation')}
-                    className="px-7 py-4 rounded-xl border border-[#00D4FF]/20 bg-[#0A1628]/40 hover:bg-[#0A1628]/80 hover:border-[#00D4FF]/40 active:scale-[0.98] transition-all text-xs font-bold font-sans uppercase tracking-wider text-[#F0F6FF]"
-                  >
-                    Read instructions
-                  </a>
+                    Trigger Particle Pulse
+                    <Zap className="w-4 h-4 text-white" />
+                  </button>
+                  <div className="px-7 py-4 rounded-xl border border-[#00D4FF]/20 bg-[#0A1628]/40 text-xs font-bold font-sans uppercase tracking-wider text-[#F0F6FF] flex items-center">
+                    Node status: Active
+                  </div>
                 </div>
               </motion.div>
 
@@ -1008,9 +452,9 @@ export default function App() {
                     <Server className="w-4 h-4 text-[#00D4FF]" />
                   </div>
                   <p className="text-3xl font-display font-bold text-white flex items-baseline gap-1">
-                    <AnimatedCounter value={bots.filter((b) => b.status === 'online').length} />
+                    <AnimatedCounter value={3} />
                     <span className="text-[#4A6080] text-sm">/</span>
-                    <AnimatedCounter value={bots.length} />
+                    <AnimatedCounter value={3} />
                   </p>
                   <p className="text-[10px] text-[#4A6080] mt-1 font-sans">Active Serverless Nodes Online</p>
                 </div>
@@ -1052,226 +496,9 @@ export default function App() {
           </section>
 
           {/* Main Container */}
-          <div className="max-w-[1200px] mx-auto px-6 space-y-32 pb-24 relative z-10">
-
-            {/* Dashboard Node Control Section */}
-            <section id="dashboard" className="scroll-reveal pt-16">
-              <div className="flex items-center justify-between bg-[#0A1628]/60 border border-[#00D4FF]/10 rounded-xl p-2 mb-10 max-w-sm">
-                <button
-                  onClick={() => {
-                    setActivePanel('monitor');
-                    audio.playClick();
-                  }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold font-sans uppercase tracking-wider transition-all cursor-pointer ${
-                    activePanel === 'monitor'
-                      ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/20'
-                      : 'text-[#4A6080] hover:text-[#F0F6FF]'
-                  }`}
-                >
-                  <Activity className="w-3.5 h-3.5" />
-                  Node console
-                </button>
-                <button
-                  onClick={() => {
-                    setActivePanel('code');
-                    audio.playClick();
-                  }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold font-sans uppercase tracking-wider transition-all cursor-pointer ${
-                    activePanel === 'code'
-                      ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/20'
-                      : 'text-[#4A6080] hover:text-[#F0F6FF]'
-                  }`}
-                >
-                  <Terminal className="w-3.5 h-3.5" />
-                  Export backend
-                </button>
-              </div>
-
-              <AnimatePresence mode="wait">
-                {activePanel === 'monitor' ? (
-                  <motion.div
-                    key="monitor"
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -15 }}
-                    transition={{ duration: 0.3 }}
-                    className="space-y-12"
-                  >
-                    {/* Active Bots Webhook List */}
-                    <ActiveBots
-                      bots={bots}
-                      selectedBotId={selectedBotId}
-                      onSelectBot={setSelectedBotId}
-                      onToggleStatus={handleToggleStatus}
-                      onDeleteBot={handleDeleteBot}
-                      onSendTestWebhook={handleTriggerWebhook}
-                    />
-
-                    {/* Provisioner Form */}
-                    <LaunchForm
-                      githubToken={githubToken}
-                      onConnectGitHub={handleConnectGitHub}
-                      onDisconnectGitHub={handleDisconnectGitHub}
-                      onSaveManualToken={handleSaveManualToken}
-                      repos={repos}
-                      isFetchingRepos={isFetchingRepos}
-                      onFetchRepos={() => handleFetchRepos()}
-                      onLaunch={handleLaunchBot}
-                      isLaunching={isLaunching}
-                    />
-
-                    {/* Live Console Simulator Logs */}
-                    <Simulator
-                      bots={bots}
-                      selectedBotId={selectedBotId}
-                      logs={logs}
-                      onClearLogs={() => setLogs([])}
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="code"
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -15 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <CodeExporter />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </section>
-
-            {/* How to Use Section */}
-            <section id="documentation" className="scroll-reveal pt-16">
-              <div>
-                <span className="text-[10px] font-mono tracking-wider text-[#00D4FF] uppercase">// DOCUMENTATION</span>
-                <h2 className="text-2xl font-display font-bold text-white tracking-tight flex items-center gap-2 mt-1">
-                  <BookOpen className="w-5 h-5 text-[#00D4FF]" />
-                  System Integration Flow
-                </h2>
-                <p className="text-xs text-[#4A6080] font-sans mt-1">
-                  Follow these core steps to provision and coordinate your Telegram Webhook deployments.
-                </p>
-              </div>
-
-              <div className="relative grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
-                {/* Dashed moving connector line behind step cards */}
-                <div className="absolute top-1/2 left-0 right-0 h-1 hidden md:block -translate-y-8 pointer-events-none z-0">
-                  <svg className="w-full h-2" fill="none">
-                    <path d="M 0,4 L 1200,4" stroke="rgba(0, 212, 255, 0.15)" strokeWidth="2" strokeDasharray="8 6" className="animated-dash-path" />
-                  </svg>
-                </div>
-                
-                {/* Step 1 */}
-                <div className="premium-glass-card rounded-2xl p-6 relative overflow-hidden min-h-[180px] transition-all duration-300 hover:scale-[1.03] hover:border-[#00D4FF]/30">
-                  <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-gradient-to-b from-[#00D4FF] to-[#7C3AED]" />
-                  <div className="step-card-watermark">01</div>
-                  <div className="relative z-10">
-                    <span className="text-[9px] font-mono tracking-wider text-[#00D4FF] uppercase">// INITIALIZE</span>
-                    <h3 className="font-display font-bold text-[#F0F6FF] text-base mt-2">Provision credentials</h3>
-                    <p className="text-xs text-[#4A6080] font-sans mt-2 leading-relaxed">
-                      Start a private conversation with @BotFather on Telegram. Send /newbot to construct a bot identifier and acquire an HTTP API security token.
-                    </p>
-                  </div>
-                </div>
-                
-                {/* Step 2 */}
-                <div className="premium-glass-card rounded-2xl p-6 relative overflow-hidden min-h-[180px] transition-all duration-300 hover:scale-[1.03] hover:border-[#00D4FF]/30">
-                  <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-gradient-to-b from-[#00D4FF] to-[#7C3AED]" />
-                  <div className="step-card-watermark">02</div>
-                  <div className="relative z-10">
-                    <span className="text-[9px] font-mono tracking-wider text-[#00D4FF] uppercase">// ROUTE</span>
-                    <h3 className="font-display font-bold text-[#F0F6FF] text-base mt-2">Configure gateway</h3>
-                    <p className="text-xs text-[#4A6080] font-sans mt-2 leading-relaxed">
-                      Insert your HTTP token block into our platform console. Choose a matching automation archetype and register the live routing tunnel.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 3 */}
-                <div className="premium-glass-card rounded-2xl p-6 relative overflow-hidden min-h-[180px] transition-all duration-300 hover:scale-[1.03] hover:border-[#00D4FF]/30">
-                  <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-gradient-to-b from-[#00D4FF] to-[#7C3AED]" />
-                  <div className="step-card-watermark">03</div>
-                  <div className="relative z-10">
-                    <span className="text-[9px] font-mono tracking-wider text-[#00D4FF] uppercase">// DEPLOY</span>
-                    <h3 className="font-display font-bold text-[#F0F6FF] text-base mt-2">Scale and monitor</h3>
-                    <p className="text-xs text-[#4A6080] font-sans mt-2 leading-relaxed">
-                      Test your setup using the inline payload triggers. Monitor logs and download the source code files to deploy permanently to Vercel.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* System Telemetry Section */}
-            <section id="status" className="scroll-reveal pt-16">
-              <div>
-                <span className="text-[10px] font-mono tracking-wider text-[#00D4FF] uppercase">// METRICS</span>
-                <h2 className="text-2xl font-display font-bold text-white tracking-tight flex items-center gap-2 mt-1">
-                  <Activity className="w-5 h-5 text-[#00D4FF]" />
-                  Edge Core Telemetry
-                </h2>
-                <p className="text-xs text-[#4A6080] font-sans mt-1">
-                  Real-time resource performance metrics tracked at the serverless edge node.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
-                <CircularProgress
-                  value={cpuUsage}
-                  max={100}
-                  label="CPU utilization"
-                  unit="%"
-                  color="#00D4FF"
-                />
-                <CircularProgress
-                  value={memoryUsage}
-                  max={100}
-                  label="Allocated memory"
-                  unit="%"
-                  color="#7C3AED"
-                />
-                <CircularProgress
-                  value={responseTime}
-                  max={150}
-                  label="Average latency"
-                  unit="ms"
-                  color="#00FF87"
-                />
-              </div>
-
-              {/* Router endpoint states */}
-              <div className="bg-[#0A1628]/40 border border-[#00D4FF]/10 rounded-2xl p-6 mt-8 relative overflow-hidden transition-all duration-300 hover:border-[#00D4FF]/30">
-                <div className="absolute inset-0 card-grid-pattern opacity-5"></div>
-                <h3 className="font-display font-bold text-xs text-[#F0F6FF] tracking-wider uppercase mb-4 flex items-center gap-2">
-                  <Database className="w-4 h-4 text-[#00D4FF]" />
-                  Gateway API Route Configuration
-                </h3>
-                
-                <div className="space-y-3 font-mono text-[11px] relative z-10">
-                  <div className="flex items-center justify-between py-2 border-b border-[#00D4FF]/5">
-                    <span className="text-[#4A6080]">GET /api/health</span>
-                    <span className="text-[#00FF87]">200 OK</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b border-[#00D4FF]/5">
-                    <span className="text-[#4A6080]">POST /api/launch</span>
-                    <span className="text-[#00FF87]">200 OK</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b border-[#00D4FF]/5">
-                    <span className="text-[#4A6080]">POST /api/stop</span>
-                    <span className="text-[#00FF87]">200 OK</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-[#4A6080]">POST /api/webhook?token=&#123;bot_token&#125;&amp;type=&#123;bot_type&#125;</span>
-                    <span className="text-[#00FF87]">200 OK</span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
+          <div className="max-w-[1200px] mx-auto px-6 pb-24 relative z-10">
             {/* Minimalist Footer */}
-            <footer className="pt-8 border-t border-[#00D4FF]/10 text-center text-[10px] font-mono text-[#4A6080]">
+            <footer className="pt-24 border-t border-[#00D4FF]/10 text-center text-[10px] font-mono text-[#4A6080]">
               <p>Multi-Bot Hosting Platform  —  Built on FastAPI & Vercel  —  2026</p>
             </footer>
           </div>

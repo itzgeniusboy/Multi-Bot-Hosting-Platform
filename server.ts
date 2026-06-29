@@ -366,23 +366,19 @@ app.get("/api/callback", async (req, res) => {
   const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
   const redirectUri = `${appUrl}/callback`;
 
-  // Handle mock sandbox login
-  if (!clientId || code === "mock_sandbox_code" || (code && String(code).startsWith("mock_"))) {
-    const accessToken = "demo_sandbox_token_2026";
-    if (req.headers.accept && req.headers.accept.includes("application/json")) {
-      return res.json({ access_token: accessToken });
-    }
-    return res.send(`
+  // Verify GITHUB_CLIENT_ID configuration
+  if (!clientId) {
+    return res.status(400).send(`
       <!DOCTYPE html>
       <html lang="en">
       <head>
           <meta charset="UTF-8">
-          <title>GitHub Authorization Success</title>
+          <title>Configuration Missing</title>
           <style>
               body {
                   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
                   background-color: #030812;
-                  color: #F0F6FF;
+                  color: #FF3B6B;
                   display: flex;
                   align-items: center;
                   justify-content: center;
@@ -391,30 +387,21 @@ app.get("/api/callback", async (req, res) => {
               }
               .card {
                   text-align: center;
-                  padding: 2rem;
+                  padding: 2.5rem;
                   background: rgba(12, 25, 46, 0.6);
-                  border: 1px solid rgba(0, 212, 255, 0.2);
+                  border: 1px solid rgba(255, 59, 107, 0.2);
                   border-radius: 1rem;
                   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                  max-width: 500px;
               }
-              h1 { color: #00D4FF; margin-bottom: 0.5rem; }
-              p { color: #8892B0; }
+              h1 { color: #FF3B6B; margin-bottom: 1rem; }
+              p { color: #8892B0; line-height: 1.5; }
           </style>
-          <script>
-              window.onload = function() {
-                  if (window.opener) {
-                      window.opener.postMessage({ type: "OAUTH_AUTH_SUCCESS", token: "${accessToken}" }, "*");
-                  } else {
-                      localStorage.setItem("github_token", "${accessToken}");
-                      window.location.href = "/";
-                  }
-              };
-          </script>
       </head>
       <body>
           <div class="card">
-              <h1>Demo Authorization Success</h1>
-              <p>Sandbox session synchronized successfully. Handshake completed!</p>
+              <h1>GitHub OAuth Setup Required</h1>
+              <p>GitHub Client ID is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio, or use the Personal Access Token (PAT) option instead!</p>
           </div>
       </body>
       </html>
@@ -515,14 +502,6 @@ app.get("/api/repos", async (req, res) => {
     return res.status(400).json({ error: "Missing required access token" });
   }
 
-  if (token.startsWith("demo_")) {
-    return res.json([
-      { id: 101, name: "telegram-bot-orchestrator", full_name: "sandbox-demo/telegram-bot-orchestrator", private: true, default_branch: "main" },
-      { id: 102, name: "serverless-microservices-deployer", full_name: "sandbox-demo/serverless-microservices-deployer", private: false, default_branch: "production" },
-      { id: 103, name: "my-cool-telegram-channels", full_name: "sandbox-demo/my-cool-telegram-channels", private: true, default_branch: "master" }
-    ]);
-  }
-
   try {
     const resp = await fetch("https://api.github.com/user/repos?per_page=100&sort=updated", {
       headers: {
@@ -565,22 +544,9 @@ app.post("/api/launch", async (req, res) => {
   if (script_name.includes("movie")) {
     pyContent = MOVIE_BOT_PY;
     actualScript = "movie_bot";
-  } else if (script_name.includes("support") || script_name.includes("welcome")) {
+  } else if (script_name.includes("management") || script_name.includes("support")) {
     pyContent = SUPPORT_BOT_PY;
-    actualScript = "support_bot";
-  } else if (script_name.includes("feedback")) {
-    pyContent = FEEDBACK_BOT_PY;
-    actualScript = "feedback_bot";
-  }
-
-  if (github_token.startsWith("demo_")) {
-    return res.json({
-      success: true,
-      message: `Success! Sandbox mock code injected and 24x7 daemon dispatch triggered for @DemoPlaygroundBot!`,
-      username: "DemoPlaygroundBot",
-      bot_type: actualScript,
-      repo_name,
-    });
+    actualScript = "management_bot";
   }
 
   try {
@@ -1075,9 +1041,8 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
                             <div class="space-y-1.5">
                                 <label class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Script Template</label>
                                 <select id="script-template" required class="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 transition-all">
-                                    <option value="movie_bot">Movie Suggestion Bot (Continuous Polling)</option>
-                                    <option value="support_bot">Customer Support Ticketing Bot</option>
-                                    <option value="feedback_bot">Feedback Collector & Contact Bot</option>
+                                    <option value="movie_bot.py">movie_bot.py (Movie catalog suggestions agent)</option>
+                                    <option value="management_bot.py">management_bot.py (Customer support ticketing & management agent)</option>
                                 </select>
                             </div>
                             

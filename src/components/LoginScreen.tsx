@@ -288,23 +288,6 @@ export default function LoginScreen({
                       )}
                     </button>
 
-                    <div className="relative flex py-2 items-center">
-                      <div className="flex-grow border-t border-slate-800/40"></div>
-                      <span className="flex-shrink mx-4 text-[9px] font-mono text-[#4A6080] uppercase tracking-wider">OR</span>
-                      <div className="flex-grow border-t border-slate-800/40"></div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        audio.playSuccess();
-                        onSaveManualToken('demo_sandbox_token_2026');
-                      }}
-                      className="w-full py-3.5 rounded-xl text-xs font-bold font-sans uppercase tracking-wider bg-[#0C192E]/60 border border-[#00D4FF]/25 hover:border-[#00D4FF]/50 text-[#00D4FF] flex items-center justify-center gap-2 hover:bg-[#0E223F] hover:scale-[1.01] transition-all cursor-pointer shadow-[0_0_15px_rgba(0,212,255,0.05)]"
-                    >
-                      <Sparkles className="w-4 h-4 text-[#00D4FF] animate-pulse" />
-                      Launch Sandbox Demo Mode
-                    </button>
                   </motion.div>
                 ) : (
                   /* OPTION B: Manual fallback Personal Access Token */

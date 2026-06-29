@@ -563,9 +563,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                             <div class="space-y-1.5">
                                 <label class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Script Template</label>
                                 <select id="script-template" required class="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 transition-all">
-                                    <option value="movie_bot">Movie Suggestion Bot (Continuous Polling)</option>
-                                    <option value="support_bot">Customer Support Ticketing Bot</option>
-                                    <option value="feedback_bot">Feedback Collector & Contact Bot</option>
+                                    <option value="movie_bot.py">movie_bot.py (Movie catalog suggestions agent)</option>
+                                    <option value="management_bot.py">management_bot.py (Customer support ticketing & management agent)</option>
                                 </select>
                             </div>
                             
@@ -1185,6 +1184,47 @@ async def login(request: Request):
 async def oauth_callback(code: str, request: Request):
     client_id = os.environ.get("GITHUB_CLIENT_ID", "")
     client_secret = os.environ.get("GITHUB_CLIENT_SECRET", "")
+    if not client_id:
+        error_html = """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Configuration Missing</title>
+            <style>
+                body {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                    background-color: #020617;
+                    color: #EF4444;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100vh;
+                    margin: 0;
+                }
+                .card {
+                    text-align: center;
+                    padding: 2.5rem;
+                    background: #0F172A;
+                    border: 1px solid rgba(239, 68, 68, 0.2);
+                    border-radius: 1rem;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                    max-width: 500px;
+                }
+                h1 { color: #EF4444; margin-bottom: 1rem; }
+                p { color: #94A3B8; line-height: 1.5; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>GitHub OAuth Setup Required</h1>
+                <p>GitHub Client ID is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio, or use the Personal Access Token (PAT) option instead!</p>
+            </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=error_html, status_code=400)
+
     app_url = os.environ.get("APP_URL", "")
     if not app_url:
         app_url = str(request.base_url).rstrip("/")
