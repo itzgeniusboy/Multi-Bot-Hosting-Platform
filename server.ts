@@ -35,7 +35,7 @@ app.post("/api/launch", async (req, res) => {
   }
 
   const cleanDomain = vercel_domain.replace("https://", "").replace("http://", "").split("/")[0];
-  const webhookUrl = `https://${cleanDomain}/api/webhook/${bot_token}/${bot_type}`;
+  const webhookUrl = `https://${cleanDomain}/api/webhook?token=${bot_token}&type=${bot_type}`;
 
   try {
     // 1. Fetch bot details using getMe API
@@ -137,9 +137,14 @@ app.post("/api/stop", async (req, res) => {
   }
 });
 
-app.post("/api/webhook/:bot_token/:bot_type", async (req, res) => {
-  const { bot_token, bot_type } = req.params;
+app.post("/api/webhook", async (req, res) => {
+  const bot_token = req.query.token as string;
+  const bot_type = req.query.type as string;
   const update = req.body;
+
+  if (!bot_token || !bot_type) {
+    return res.status(400).json({ status: "error", message: "Missing token or type query parameter" });
+  }
 
   console.log(`Incoming Telegram update for bot ${bot_token.slice(0, 10)}... type ${bot_type}:`, JSON.stringify(update));
 

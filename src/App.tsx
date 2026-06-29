@@ -611,14 +611,14 @@ export default function App() {
       bot.id,
       bot.username,
       'POST',
-      `/api/webhook/${bot.token.substring(0, 6)}.../${bot.behavior}`,
+      `/api/webhook?token=${bot.token.substring(0, 6)}...&type=${bot.behavior}`,
       200,
       `Incoming Telegram Update. Message: "${text}"`,
       JSON.stringify(mockTelegramUpdate, null, 2)
     );
 
     try {
-      const response = await fetch(`/api/webhook/${bot.token}/${bot.behavior}`, {
+      const response = await fetch(`/api/webhook?token=${bot.token}&type=${bot.behavior}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -632,7 +632,7 @@ export default function App() {
         bot.id,
         bot.username,
         'POST',
-        `/api/webhook/${bot.token.substring(0, 6)}.../${bot.behavior}`,
+        `/api/webhook?token=${bot.token.substring(0, 6)}...&type=${bot.behavior}`,
         200,
         `Compiled response delivered successfully via Telegram API. Action: ${resData.action || 'reply_sent'}`
       );
@@ -644,7 +644,7 @@ export default function App() {
           bot.id,
           bot.username,
           'POST',
-          `/api/webhook/${bot.token.substring(0, 6)}.../${bot.behavior}`,
+          `/api/webhook?token=${bot.token.substring(0, 6)}...&type=${bot.behavior}`,
           200,
           `Compiled support ticket reply dispatched to client socket.`
         );
@@ -1082,7 +1082,7 @@ export default function App() {
                     <span className="text-[#00FF87]">200 OK</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
-                    <span className="text-[#4A6080]">POST /api/webhook/&#123;bot_token&#125;/&#123;bot_type&#125;</span>
+                    <span className="text-[#4A6080]">POST /api/webhook?token=&#123;bot_token&#125;&amp;type=&#123;bot_type&#125;</span>
                     <span className="text-[#00FF87]">200 OK</span>
                   </div>
                 </div>

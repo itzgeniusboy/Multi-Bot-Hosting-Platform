@@ -141,8 +141,8 @@ export default function ActiveBots({
                           </div>
                           <div className="flex justify-between items-center gap-4">
                             <span className="text-[#4A6080]">ROUTING:</span>
-                            <span className="text-[#00D4FF]/80 truncate font-medium" title={`https://${bot.vercelDomain}/api/webhook/${bot.token}/${bot.behavior}`}>
-                              /api/webhook/{bot.token.substring(0, 5)}...
+                            <span className="text-[#00D4FF]/80 truncate font-medium" title={`https://${bot.vercelDomain}/api/webhook?token=${bot.token}&type=${bot.behavior}`}>
+                              /api/webhook?token={bot.token.substring(0, 5)}...
                             </span>
                           </div>
                         </div>

@@ -10,7 +10,7 @@ import os
 import json
 import logging
 from typing import Dict, Any
-from fastapi import FastAPI, Request, HTTPException, status
+from fastapi import FastAPI, Request, HTTPException, status, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
@@ -76,7 +76,7 @@ async def launch_bot(payload: Dict[str, Any]):
         
     # Clean the domain (strip protocol or trailing slashes if passed)
     clean_domain = vercel_domain.replace("https://", "").replace("http://", "").strip("/")
-    webhook_url = f"https://{clean_domain}/api/webhook/{bot_token}/{bot_type}"
+    webhook_url = f"https://{clean_domain}/api/webhook?token={bot_token}&type={bot_type}"
     
     async with httpx.AsyncClient() as client:
         try:
@@ -196,8 +196,12 @@ async def stop_bot(payload: Dict[str, Any]):
                 detail=f"An unexpected internal error occurred: {str(e)}"
             )
 
-@app.post("/api/webhook/{bot_token}/{bot_type}")
-async def telegram_webhook(bot_token: str, bot_type: str, request: Request):
+@app.post("/api/webhook")
+async def telegram_webhook(
+    request: Request,
+    token: str = Query(...),
+    type: str = Query(...)
+):
     """
     Dynamic webhook route to process incoming Telegram updates based on bot template type.
     """
@@ -207,7 +211,7 @@ async def telegram_webhook(bot_token: str, bot_type: str, request: Request):
         logger.error("Failed to decode JSON from incoming Telegram update.")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
         
-    logger.info(f"Incoming Telegram update for bot {bot_token[:10]}...: {json.dumps(update)}")
+    logger.info(f"Incoming Telegram update for bot {token[:10]}...: {json.dumps(update)}")
     
     message = update.get("message")
     if not message:
@@ -220,22 +224,22 @@ async def telegram_webhook(bot_token: str, bot_type: str, request: Request):
     chat_id = chat["id"]
     text = message.get("text", "").strip()
     
-    telegram_send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    telegram_send_url = f"https://api.telegram.org/bot{token}/sendMessage"
     response_text = ""
     
     if text.startswith("/start"):
-        if bot_type == "welcome":
+        if type == "welcome":
             response_text = (
                 "*Welcome to Support Bot*\\n\\n"
                 "Your automated welcoming system is fully active, running 24x7 on our serverless node with zero latency.\\n\\n"
                 "How can we assist you today? Please reply with your query."
             )
-        elif bot_type == "feedback":
+        elif type == "feedback":
             response_text = (
                 "*Feedback and Contact Bot*\\n\\n"
                 "Your feedback is highly valuable to us. Please write your comments, suggestions, or queries below, and they will be forwarded immediately to the owner."
             )
-        elif bot_type == "echo":
+        elif type == "echo":
             response_text = (
                 "*Echo and Auto-Reply Bot*\\n\\n"
                 "The echo engine is active. Any text or message you send to this bot will be automatically reflected back to you instantly."
@@ -246,14 +250,14 @@ async def telegram_webhook(bot_token: str, bot_type: str, request: Request):
                 "The webhook node is operational. Customize your handler code or choose a template."
             )
     else:
-        if bot_type == "echo":
+        if type == "echo":
             response_text = f"You said: \\\`{text}\\\`"
-        elif bot_type == "feedback":
+        elif type == "feedback":
             response_text = (
                 "*Thank you for your feedback!*\\n\\n"
                 "Your message has been received and securely forwarded. The administration team will review your comments as soon as possible."
             )
-        elif bot_type == "welcome":
+        elif type == "welcome":
             response_text = (
                 "*Support Ticket Registered*\\n\\n"
                 "Thank you for contacting our customer support team. Your message has been logged under our active serverless node, and a representative will reply shortly."
@@ -274,7 +278,7 @@ async def telegram_webhook(bot_token: str, bot_type: str, request: Request):
             )
             res_data = response.json()
             if response.status_code == 200 and res_data.get("ok"):
-                return {"status": "success", "action": "sent_reply", "bot_type": bot_type}
+                return {"status": "success", "action": "sent_reply", "bot_type": type}
             else:
                 return {"status": "partial_error", "telegram_error": res_data}
         except Exception as e:
