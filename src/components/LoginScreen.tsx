@@ -56,16 +56,6 @@ export default function LoginScreen({
 
     setIsValidating(true);
     try {
-      if (trimmedPat.startsWith('demo_')) {
-        // Mock validation for demo/sandbox tokens
-        setTimeout(() => {
-          audio.playSuccess();
-          onSaveManualToken(trimmedPat);
-          setIsValidating(false);
-        }, 800);
-        return;
-      }
-
       // Direct API call to GitHub to validate token credentials
       const response = await fetch('https://api.github.com/user', {
         headers: {

@@ -355,13 +355,12 @@ app.get("/api/health", (req, res) => {
 
 app.get("/api/login", (req, res) => {
   if (!GITHUB_CLIENT_ID) {
-    // Elegant sandbox fallback so that the applet works flawlessly in AI Studio out of the box
-    const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-    const authUrl = `${appUrl}/api/callback?code=mock_sandbox_code`;
-    return res.json({ url: authUrl, is_mock: true });
+    return res.status(400).json({
+      error: "GitHub OAuth is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio, or use the Personal Access Token (PAT) option instead."
+    });
   }
 
-  const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=repo%20workflow`;
+  const authUrl = `https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=repo%20workflow`;
   res.json({ url: authUrl });
 });
 
@@ -370,66 +369,6 @@ app.get("/api/callback", async (req, res) => {
 
   // Verify GITHUB_CLIENT_ID configuration
   if (!GITHUB_CLIENT_ID) {
-    // If it's a sandbox fallback code, we can bypass the GITHUB exchange and mock a token:
-    if (code === "mock_sandbox_code") {
-      const accessToken = "mock_sandbox_access_token_xyz123";
-      res.cookie("github_token", accessToken, {
-        httpOnly: false,
-        secure: true,
-        sameSite: "lax",
-        maxAge: 31536000000,
-      });
-      return res.send(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title>Sandbox Authorization Success</title>
-            <style>
-                body {
-                    font-family: 'Inter', -apple-system, sans-serif;
-                    background-color: #020617;
-                    color: #F8FAFC;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    height: 100vh;
-                    margin: 0;
-                    text-align: center;
-                }
-                .card {
-                    background-color: #0F172A;
-                    border: 1px solid #1E293B;
-                    padding: 2.5rem;
-                    border-radius: 1.25rem;
-                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-                }
-            </style>
-        </head>
-        <body>
-            <div class="card">
-                <h2 style="color: #22D3EE; margin-top: 0; font-weight: 800;">Authorized via Sandbox</h2>
-                <p style="color: #94A3B8; font-size: 0.95rem;">Successfully connected to local workspace development mode.</p>
-            </div>
-            <script>
-                const token = "${accessToken}";
-                if (window.opener) {
-                    window.opener.postMessage({ type: "OAUTH_AUTH_SUCCESS", token: token }, "*");
-                    setTimeout(() => { window.close(); }, 1000);
-                    // Fallback in case window.close is blocked or ignored by the browser
-                    setTimeout(() => {
-                        window.location.href = "/?token=" + token + "#dashboard-section";
-                    }, 1800);
-                } else {
-                    window.location.href = "/?token=" + token + "#dashboard-section";
-                }
-            </script>
-        </body>
-        </html>
-      `);
-    }
-
     return res.status(400).send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -576,14 +515,6 @@ app.get("/api/repos", async (req, res) => {
     return res.status(400).json({ error: "Missing required access token" });
   }
 
-  if (token.startsWith("mock_sandbox_") || token.startsWith("demo_")) {
-    return res.json([
-      { id: 101, name: "my-telegram-bot", full_name: "sandbox-user/my-telegram-bot", private: false, default_branch: "main" },
-      { id: 102, name: "movie-showcase-bot", full_name: "sandbox-user/movie-showcase-bot", private: true, default_branch: "master" },
-      { id: 103, name: "customer-support-agent", full_name: "sandbox-user/customer-support-agent", private: false, default_branch: "main" }
-    ]);
-  }
-
   try {
     const resp = await fetch("https://api.github.com/user/repos?per_page=100&sort=updated", {
       headers: {
@@ -620,17 +551,6 @@ app.post("/api/launch", async (req, res) => {
     return res.status(400).json({ success: false, detail: "Missing required deployment fields" });
   }
 
-  if (github_token && (github_token.startsWith("mock_sandbox_") || github_token.startsWith("demo_"))) {
-    const bot_username = "MySandboxBot";
-    return res.json({
-      success: true,
-      status: "success",
-      message: `Successfully injected daemon workflow and triggered 24x7 Action runner for @${bot_username} (Sandbox Mode)`,
-      bot_username: bot_username,
-      workflow_url: `https://github.com/${repo_name}/actions`
-    });
-  }
-
   // Select script content
   let pyContent = MOVIE_BOT_PY;
   let actualScript = "movie_bot";
@@ -640,6 +560,9 @@ app.post("/api/launch", async (req, res) => {
   } else if (script_name.includes("management") || script_name.includes("support")) {
     pyContent = SUPPORT_BOT_PY;
     actualScript = "management_bot";
+  } else if (script_name.includes("feedback") || script_name.includes("custom_mod")) {
+    pyContent = FEEDBACK_BOT_PY;
+    actualScript = "custom_mod_bot";
   }
 
   try {

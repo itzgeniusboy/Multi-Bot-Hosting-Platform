@@ -195,27 +195,6 @@ export default function App() {
     setIsFetchingUser(true);
     setIsFetchingRepos(true);
     try {
-      if (token.startsWith('mock_sandbox_') || token.startsWith('demo_')) {
-        const mockUser = {
-          login: 'sandbox-user',
-          name: 'Sandbox Developer',
-          avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-          html_url: 'https://github.com',
-        };
-        setGitHubUser(mockUser);
-
-        // Fetch repos
-        const reposResp = await fetch(`/api/repos?token=${token}`);
-        if (reposResp.ok) {
-          const reposData = await reposResp.json();
-          setRepos(reposData);
-          if (reposData.length > 0) {
-            setSelectedRepo(reposData[0].full_name || reposData[0].name || '');
-          }
-        }
-        return;
-      }
-
       // 1. Fetch user profile
       const userResp = await fetch('https://api.github.com/user', {
         headers: {
@@ -523,27 +502,6 @@ export default function App() {
                 transition={{ duration: 0.8, delay: 0.1 }}
                 className="lg:col-span-7 space-y-8 text-left"
               >
-                {/* Visual login test banner */}
-                <div className="p-4 rounded-xl border text-xs font-mono flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-cyan-500/20 bg-cyan-500/5 text-cyan-300">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full animate-pulse bg-cyan-400"></span>
-                    <span>
-                      <strong>SESSION STATUS:</strong> Authenticated with GitHub.
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleDisconnectGitHub}
-                    className="px-3.5 py-1.5 rounded-lg bg-[#FF3B6B]/15 hover:bg-[#FF3B6B]/25 text-[#FF3B6B] border border-[#FF3B6B]/30 transition-all font-sans font-bold text-[11px] cursor-pointer"
-                  >
-                    Sign Out / View Login Screen
-                  </button>
-                </div>
-
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#00D4FF]/8 border border-[#00D4FF]/15 rounded-full text-[10px] font-mono tracking-widest text-[#00D4FF] shadow-[0_0_15px_rgba(0,212,255,0.06)]">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#00D4FF]" />
-                  SECURE WEBHOOK INTEGRATION LAYER
-                </div>
                 
                 {/* Title with Layered Extrusion */}
                 <h1 className="text-4xl sm:text-5xl lg:text-7xl font-display font-extrabold tracking-tight text-white leading-[1.08] neon-extrusion-text">
@@ -553,22 +511,6 @@ export default function App() {
                   </span>
                 </h1>
 
-                <p className="text-sm sm:text-base text-[#4A6080] max-w-xl font-sans leading-relaxed">
-                  Dynamically route, configure, and simulate secure Telegram Bots in real-time. Mount robust serverless microservices with instant API synchronization and zero configuration latency.
-                </p>
-
-                <div className="flex flex-wrap gap-4 pt-4">
-                  <button
-                    onClick={handleTriggerSparkle}
-                    className="px-7 py-4 rounded-xl bg-gradient-to-r from-[#00D4FF] to-[#7C3AED] hover:scale-[1.03] active:scale-[0.98] transition-all text-xs font-bold font-sans uppercase tracking-wider text-white shadow-lg shadow-[#00D4FF]/25 flex items-center gap-2 magnetic-btn cursor-pointer"
-                  >
-                    Trigger Particle Pulse
-                    <Zap className="w-4 h-4 text-white" />
-                  </button>
-                  <div className="px-7 py-4 rounded-xl border border-[#00D4FF]/20 bg-[#0A1628]/40 text-xs font-bold font-sans uppercase tracking-wider text-[#F0F6FF] flex items-center">
-                    Node status: Active
-                  </div>
-                </div>
               </motion.div>
 
               {/* Hero right floating Stat Cards block */}
@@ -769,6 +711,7 @@ export default function App() {
                       >
                         <option value="movie_bot.py">movie_bot.py (Movie catalog suggestions agent)</option>
                         <option value="management_bot.py">management_bot.py (Customer support ticketing & management agent)</option>
+                        <option value="custom_mod_bot.py">custom_mod_bot.py (Custom moderation & feedback logging agent)</option>
                       </select>
                       <p className="text-[10px] text-[#4A6080] font-sans">
                         Choose the pre-built functional template to host. Both support auto-polling on actions.
@@ -860,7 +803,7 @@ export default function App() {
                       ) : (
                         <>
                           <Zap className="w-4 h-4 text-white" />
-                          IMPORT & DEPLOY NODE
+                          Deploy Node & Run 24x7
                         </>
                       )}
                     </button>

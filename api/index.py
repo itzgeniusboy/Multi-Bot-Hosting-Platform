@@ -565,13 +565,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                                 <select id="script-template" required class="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 transition-all">
                                     <option value="movie_bot.py">movie_bot.py (Movie catalog suggestions agent)</option>
                                     <option value="management_bot.py">management_bot.py (Customer support ticketing & management agent)</option>
+                                    <option value="custom_mod_bot.py">custom_mod_bot.py (Custom moderation & feedback logging agent)</option>
                                 </select>
                             </div>
                             
                             <!-- Launch Button -->
                             <button type="submit" id="deploy-submit-btn" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 hover:from-cyan-400 hover:to-violet-500 text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-cyan-500/5 flex items-center justify-center gap-2">
                                 <i data-lucide="play" class="w-4 h-4"></i>
-                                Deploy & Run 24x7
+                                Deploy Node & Run 24x7
                             </button>
                         </form>
                     </div>
@@ -819,18 +820,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         // Fetch User Info
         async function fetchUserInfo() {
             if (!githubToken) return;
-            if (githubToken.startsWith('mock_sandbox_') || githubToken.startsWith('demo_')) {
-                const user = {
-                    login: 'sandbox-user',
-                    name: 'Sandbox Developer',
-                    avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'
-                };
-                localStorage.setItem('github_username', user.login);
-                document.getElementById('user-display-name').innerText = user.name || user.login;
-                document.getElementById('user-github-handle').innerText = `@${user.login}`;
-                document.getElementById('user-avatar').innerHTML = `<img src="${user.avatar_url}" alt="Avatar" class="w-full h-full object-cover">`;
-                return;
-            }
             try {
                 const resp = await fetch('https://api.github.com/user', {
                     headers: {
@@ -1205,10 +1194,10 @@ async def health():
 @app.get("/login")
 async def login(request: Request):
     if not GITHUB_CLIENT_ID:
-        # Elegant sandbox fallback so that the applet works flawlessly in AI Studio out of the box
-        base_url = str(request.base_url).rstrip("/")
-        auth_url = f"{base_url}/api/callback?code=mock_sandbox_code"
-        return {"url": auth_url, "is_mock": True}
+        raise HTTPException(
+            status_code=400,
+            detail="GitHub OAuth is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio, or use the Personal Access Token (PAT) option instead."
+        )
 
     auth_url = f"https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=repo%20workflow"
     return {"url": auth_url}
@@ -1218,67 +1207,6 @@ async def login(request: Request):
 async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
     if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
         print("[DEBUG] GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET is missing during callback handling!")
-        if code == "mock_sandbox_code":
-            access_token = "mock_sandbox_access_token_xyz123"
-            html_content = f"""
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <title>Sandbox Authorization Success</title>
-                <style>
-                    body {{
-                        font-family: 'Inter', -apple-system, sans-serif;
-                        background-color: #020617;
-                        color: #F8FAFC;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        height: 100vh;
-                        margin: 0;
-                        text-align: center;
-                    }}
-                    .card {{
-                        background-color: #0F172A;
-                        border: 1px solid #1E293B;
-                        padding: 2.5rem;
-                        border-radius: 1.25rem;
-                        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-                    }}
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <h2 style="color: #22D3EE; margin-top: 0; font-weight: 800;">Authorized via Sandbox</h2>
-                    <p style="color: #94A3B8; font-size: 0.95rem;">Successfully connected to local workspace development mode.</p>
-                </div>
-                <script>
-                    const token = "{access_token}";
-                    if (window.opener) {
-                        window.opener.postMessage({ type: "OAUTH_AUTH_SUCCESS", token: token }, "*");
-                        setTimeout(() => { window.close(); }, 1000);
-                        // Fallback in case window.close is blocked or ignored by the browser
-                        setTimeout(() => {
-                            window.location.href = "/?token=" + token + "#dashboard-section";
-                        }, 1800);
-                    } else {
-                        window.location.href = "/?token=" + token + "#dashboard-section";
-                    }
-                </script>
-            </body>
-            </html>
-            """
-            response = HTMLResponse(content=html_content)
-            response.set_cookie(
-                key="github_token",
-                value=access_token,
-                httponly=False,
-                secure=True,
-                samesite="lax",
-                max_age=31536000
-            )
-            return response
 
         error_html = """
         <!DOCTYPE html>
@@ -1420,13 +1348,6 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
 @app.get("/api/repos")
 @app.get("/repos")
 async def get_repositories(token: str = Query(...)):
-    if token.startswith("mock_sandbox_") or token.startswith("demo_"):
-        return [
-            {"id": 101, "name": "my-telegram-bot", "full_name": "sandbox-user/my-telegram-bot", "private": False, "default_branch": "main"},
-            {"id": 102, "name": "movie-showcase-bot", "full_name": "sandbox-user/movie-showcase-bot", "private": True, "default_branch": "master"},
-            {"id": 103, "name": "customer-support-agent", "full_name": "sandbox-user/customer-support-agent", "private": False, "default_branch": "main"}
-        ]
-
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             "https://api.github.com/user/repos?per_page=100&sort=updated",
@@ -1488,16 +1409,6 @@ async def launch_bot(payload: LaunchRequest):
     if not repo_name or not bot_token or not script_name:
         raise HTTPException(status_code=400, detail="Missing required deployment fields")
 
-    if github_token and (github_token.startswith("mock_sandbox_") or github_token.startswith("demo_")):
-        # Gracefully handle sandbox simulation for instant testing
-        bot_username = "MySandboxBot"
-        return {
-            "status": "success",
-            "message": f"Successfully injected daemon workflow and triggered 24x7 Action runner for @{bot_username} (Sandbox Mode)",
-            "bot_username": bot_username,
-            "workflow_url": f"https://github.com/{repo_name}/actions"
-        }
-
     # Select Python script template
     if "movie" in script_name:
         py_content = MOVIE_BOT_PY
@@ -1505,9 +1416,9 @@ async def launch_bot(payload: LaunchRequest):
     elif "support" in script_name or "management" in script_name:
         py_content = SUPPORT_BOT_PY
         actual_script = "management_bot"
-    elif "feedback" in script_name:
+    elif "feedback" in script_name or "custom_mod" in script_name:
         py_content = FEEDBACK_BOT_PY
-        actual_script = "feedback_bot"
+        actual_script = "custom_mod_bot"
     else:
         py_content = MOVIE_BOT_PY
         actual_script = "movie_bot"
