@@ -185,11 +185,19 @@ export default function ThreeHero() {
 
     window.addEventListener('test-webhook-triggered', handleWebhookSignal);
 
+    // Tab Focus check to save GPU resources
+    let isTabVisible = true;
+    const handleVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // --- ANIMATION LOOP ---
     const clock = new THREE.Clock();
 
     const animate = () => {
       requestIndex = requestAnimationFrame(animate);
+      if (!isTabVisible) return; // Skip updating and rendering when page is unfocused
 
       const delta = clock.getDelta();
       const time = clock.getElapsedTime();
@@ -299,6 +307,7 @@ export default function ThreeHero() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('test-webhook-triggered', handleWebhookSignal);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       resizeObserver.disconnect();
       cancelAnimationFrame(requestIndex);
 

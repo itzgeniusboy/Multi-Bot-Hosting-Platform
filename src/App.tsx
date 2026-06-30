@@ -15,16 +15,22 @@ import {
   CheckCircle2,
   Loader2,
   Lock,
-  Code
+  Code,
+  Plus,
+  Trash2,
+  ExternalLink,
+  Power,
+  Play
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Lenis from 'lenis';
 import ThreeHero from './components/ThreeHero';
 import CustomCursor from './components/CustomCursor';
 import LoadingScreen from './components/LoadingScreen';
+import NewProjectModal from './components/NewProjectModal';
 import { audio } from './utils/audio';
+import { Project } from './types';
 
-// Dynamic statistical counter with smooth animation on mount/value change
 interface AnimatedCounterProps {
   value: number;
   duration?: number;
@@ -63,7 +69,6 @@ function AnimatedCounter({ value, duration = 800 }: AnimatedCounterProps) {
   return <span>{count}</span>;
 }
 
-// Circular Progress Meter Component with IntersectionObserver + requestAnimationFrame
 interface CircularProgressProps {
   value: number;
   max?: number;
@@ -124,14 +129,10 @@ function CircularProgress({ value, max = 100, label, unit, color }: CircularProg
   return (
     <div ref={elementRef} className="premium-glass-card rounded-2xl p-6 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-300 hover:scale-[1.03] hover:border-[#00D4FF]/40 hover:shadow-[0_0_30px_rgba(0,212,255,0.08)]">
       <div className="absolute inset-0 card-grid-pattern opacity-5 pointer-events-none"></div>
-      
-      {/* Glow highlight */}
       <div className="absolute top-0 left-1/4 w-1/2 h-px bg-gradient-to-r from-transparent via-[#00D4FF]/25 to-transparent"></div>
 
       <div className="relative w-28 h-28 flex items-center justify-center">
-        {/* Decorative rotating ring */}
         <div className="absolute inset-1.5 rounded-full border border-dashed border-[#00D4FF]/5 animate-rotate-slow"></div>
-        
         <svg className="w-full h-full transform -rotate-90">
           <circle
             cx="56"
@@ -157,15 +158,66 @@ function CircularProgress({ value, max = 100, label, unit, color }: CircularProg
             }}
           />
         </svg>
-
         <div className="absolute flex flex-col items-center justify-center">
           <span className="text-xl font-mono font-bold text-[#F0F6FF]">{currentVal}{unit}</span>
         </div>
       </div>
-      
       <span className="text-[10px] font-mono tracking-widest text-[#4A6080] uppercase mt-4 text-center">
         {label}
       </span>
+    </div>
+  );
+}
+
+// Interactive 3D tilt "Add Project" Card
+interface AddProjectCardProps {
+  onClick: () => void;
+}
+
+function AddProjectCard({ onClick }: AddProjectCardProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return;
+    const card = cardRef.current;
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const xc = rect.width / 2;
+    const yc = rect.height / 2;
+    
+    const tiltX = (yc - y) / 14;
+    const tiltY = (x - xc) / 14;
+    
+    card.style.transform = `perspective(600px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) scale(1.02)`;
+  };
+
+  const handleMouseLeave = () => {
+    if (!cardRef.current) return;
+    cardRef.current.style.transform = `perspective(600px) rotateX(0deg) rotateY(0deg) scale(1)`;
+  };
+
+  return (
+    <div
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      onClick={onClick}
+      className="premium-glass-card rounded-2xl border-2 border-dashed border-[#00D4FF]/25 hover:border-[#00D4FF]/60 bg-[#0A1628]/35 p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 min-h-[240px] relative overflow-hidden group shadow-[0_15px_40px_rgba(0,0,0,0.4)]"
+    >
+      <div className="absolute inset-0 card-grid-pattern opacity-5 pointer-events-none"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-[#00D4FF]/0 to-[#7C3AED]/0 group-hover:from-[#00D4FF]/5 group-hover:to-[#7C3AED]/5 transition-all duration-500"></div>
+
+      <div className="p-4 rounded-full bg-[#00D4FF]/10 border border-[#00D4FF]/20 text-[#00D4FF] group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(0,212,255,0.2)] transition-all duration-300 mb-4">
+        <Plus className="w-8 h-8 text-[#00D4FF]" />
+      </div>
+      <h3 className="text-xs font-display font-extrabold text-white tracking-widest uppercase">
+        Import Project
+      </h3>
+      <p className="text-[10px] text-[#4A6080] mt-2 max-w-[200px] leading-relaxed">
+        Connect repository, validate bot token, and deploy serverless python node instantly.
+      </p>
     </div>
   );
 }
@@ -175,27 +227,33 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
-  // GitHub SaaS OAuth & Repos states
+  // GitHub state
   const [githubToken, setGithubToken] = useState<string | null>(localStorage.getItem('github_token'));
   const [gitHubUser, setGitHubUser] = useState<any>(null);
   const [repos, setRepos] = useState<any[]>([]);
   const [isFetchingRepos, setIsFetchingRepos] = useState(false);
   const [isFetchingUser, setIsFetchingUser] = useState(false);
 
-  // Form states
-  const [selectedRepo, setSelectedRepo] = useState<string>('');
-  const [botToken, setBotToken] = useState<string>('');
-  const [selectedScript, setSelectedScript] = useState<string>('movie_bot.py');
-  const [isDeploying, setIsDeploying] = useState(false);
-  const [deployResult, setDeployResult] = useState<any>(null);
-  const [deployError, setDeployError] = useState<string>('');
+  // Project modal & listings state
+  const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
+  const [activeProjects, setActiveProjects] = useState<Project[]>([]);
+  const [botActionLoading, setBotActionLoading] = useState<string | null>(null);
+
+  // Real data telemetry stats state
+  const [stats, setStats] = useState({
+    cpu: 1.5,
+    memory: 42.0,
+    latency: 75,
+    totalRequests: 1482,
+    activeNodes: 0,
+    status: 'healthy'
+  });
 
   // Fetch GitHub User and Repos
   const fetchGitHubUserAndRepos = async (token: string) => {
     setIsFetchingUser(true);
     setIsFetchingRepos(true);
     try {
-      // 1. Fetch user profile
       const userResp = await fetch('https://api.github.com/user', {
         headers: {
           Authorization: `token ${token}`,
@@ -207,14 +265,10 @@ export default function App() {
         setGitHubUser(userData);
       }
 
-      // 2. Fetch repos
       const reposResp = await fetch(`/api/repos?token=${token}`);
       if (reposResp.ok) {
         const reposData = await reposResp.json();
         setRepos(reposData);
-        if (reposData.length > 0) {
-          setSelectedRepo(reposData[0].full_name || reposData[0].name || '');
-        }
       }
     } catch (err) {
       console.error('Failed to fetch GitHub details:', err);
@@ -224,20 +278,38 @@ export default function App() {
     }
   };
 
+  // Fetch projects and telemetry stats from real data endpoints
+  const fetchProjectsAndStats = async () => {
+    try {
+      const projResp = await fetch('/api/projects');
+      if (projResp.ok) {
+        const projData = await projResp.json();
+        setActiveProjects(projData);
+      }
+
+      const statsResp = await fetch('/api/stats');
+      if (statsResp.ok) {
+        const statsData = await statsResp.json();
+        setStats(statsData);
+      }
+    } catch (err) {
+      console.error('Failed to fetch stats/projects:', err);
+    }
+  };
+
   // Sync details on mount or token changes
   useEffect(() => {
     if (githubToken) {
       fetchGitHubUserAndRepos(githubToken);
+      fetchProjectsAndStats();
+      
+      // Pull real-time telemetry every 4 seconds
+      const timer = setInterval(fetchProjectsAndStats, 4000);
+      return () => clearInterval(timer);
     }
   }, [githubToken]);
 
-  // System status mock telemetry data
-  const [cpuUsage, setCpuUsage] = useState(12);
-  const [memoryUsage, setMemoryUsage] = useState(44);
-  const [responseTime, setResponseTime] = useState(82);
-  const [totalRequests, setTotalRequests] = useState(1482);
-
-  // Initialize Lenis Smooth Scroll
+  // Smooth Scroll setup
   useEffect(() => {
     if (isLoading) return;
 
@@ -266,20 +338,7 @@ export default function App() {
     };
   }, [isLoading]);
 
-  // Telemetry jitter simulator
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCpuUsage(Math.floor(Math.random() * 8) + 8);
-      setMemoryUsage(Math.floor(Math.random() * 3) + 42);
-      setResponseTime(Math.floor(Math.random() * 20) + 75);
-      setTotalRequests((prev) => prev + Math.floor(Math.random() * 2) + 1);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // =========================================================================
-  // GITHUB SAAS OAUTH & REGISTRATION HANDLERS
-  // =========================================================================
+  // GitHub Authentication redirects
   const handleConnectGitHub = async () => {
     audio.playClick();
     try {
@@ -292,7 +351,6 @@ export default function App() {
       }
       const data = await response.json();
       if (data.url) {
-        // Open GitHub OAuth URL directly in popup
         const popup = window.open(data.url, 'github_oauth_popup', 'width=600,height=700');
         if (!popup) {
           const popupBlockedMsg = 'Popup blocked! Please allow popups for this site, or open the app in a new tab to continue.';
@@ -305,10 +363,7 @@ export default function App() {
         throw new Error(invalidUrlMsg);
       }
     } catch (e: any) {
-      console.error('GitHub OAuth redirect construct error:', e);
-      if (e.message && !e.message.includes('Server Error:') && !e.message.includes('Popup blocked') && !e.message.includes('Authentication endpoint')) {
-        alert(`OAuth Error: ${e.message}`);
-      }
+      console.error('GitHub OAuth redirect error:', e);
       throw e;
     }
   };
@@ -319,51 +374,7 @@ export default function App() {
     setGithubToken(null);
     setGitHubUser(null);
     setRepos([]);
-    setSelectedRepo('');
-    setBotToken('');
-    setDeployResult(null);
-    setDeployError('');
-  };
-
-  const handleDeployBot = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedRepo || !botToken || !selectedScript || !githubToken) {
-      setDeployError('Please complete all form fields.');
-      return;
-    }
-    setIsDeploying(true);
-    setDeployResult(null);
-    setDeployError('');
-    audio.playClick();
-
-    try {
-      const response = await fetch('/api/launch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          repo_name: selectedRepo,
-          bot_token: botToken,
-          script_name: selectedScript,
-          github_token: githubToken,
-        }),
-      });
-
-      const data = await response.json();
-      if (response.ok && data.success) {
-        setDeployResult(data);
-        audio.playSuccess();
-        // Trigger particle pulse animation
-        window.dispatchEvent(new Event('test-webhook-triggered'));
-      } else {
-        setDeployError(data.message || data.detail || 'Deployment failed. Please check your token & workflow permissions.');
-      }
-    } catch (err: any) {
-      setDeployError(err.message || 'Failed to connect to deployment gateway.');
-    } finally {
-      setIsDeploying(false);
-    }
+    setActiveProjects([]);
   };
 
   const handleSaveManualToken = (token: string) => {
@@ -371,7 +382,7 @@ export default function App() {
     setGithubToken(token);
   };
 
-  // Listen for OAuth success messaging from callback popup
+  // Synchronize callbacks from popup oauth
   useEffect(() => {
     const handleOAuthMessage = (event: MessageEvent) => {
       const origin = event.origin;
@@ -383,9 +394,7 @@ export default function App() {
         origin.includes('127.0.0.1') ||
         origin === window.location.origin;
 
-      if (!isAllowedOrigin) {
-        return;
-      }
+      if (!isAllowedOrigin) return;
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.token) {
         const token = event.data.token;
         localStorage.setItem('github_token', token);
@@ -396,7 +405,7 @@ export default function App() {
     return () => window.removeEventListener('message', handleOAuthMessage);
   }, []);
 
-  // Check URL query parameters for fallback redirect OAuth token exchange
+  // Sync token from direct callback query
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
@@ -407,14 +416,77 @@ export default function App() {
     }
   }, []);
 
+  // Bot Node Action controls
+  const handleStopBot = async (repoName: string) => {
+    audio.playClick();
+    setBotActionLoading(repoName);
+    try {
+      const resp = await fetch('/api/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_name: repoName,
+          github_token: githubToken || 'demo_p_token'
+        })
+      });
+      if (resp.ok) {
+        await fetchProjectsAndStats();
+      }
+    } catch (err) {
+      console.error('Failed to stop bot:', err);
+    } finally {
+      setBotActionLoading(null);
+    }
+  };
+
+  const handleStartBot = async (project: Project) => {
+    audio.playClick();
+    setBotActionLoading(project.repo_name);
+    try {
+      const resp = await fetch('/api/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_name: project.repo_name,
+          bot_token: project.bot_token,
+          script_name: project.script_name,
+          github_token: githubToken || 'demo_p_token'
+        })
+      });
+      if (resp.ok) {
+        await fetchProjectsAndStats();
+        window.dispatchEvent(new Event('test-webhook-triggered'));
+      }
+    } catch (err) {
+      console.error('Failed to start bot:', err);
+    } finally {
+      setBotActionLoading(null);
+    }
+  };
+
+  const handleDeleteProject = async (repoName: string) => {
+    audio.playClick();
+    if (!confirm('Are you sure you want to remove this project from your dashboard?')) return;
+    setBotActionLoading(repoName);
+    try {
+      const resp = await fetch('/api/projects/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo_name: repoName })
+      });
+      if (resp.ok) {
+        await fetchProjectsAndStats();
+      }
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+    } finally {
+      setBotActionLoading(null);
+    }
+  };
+
   const handleToggleMute = () => {
     const status = audio.toggleMute();
     setIsMuted(status);
-  };
-
-  const handleTriggerSparkle = () => {
-    audio.playSuccess();
-    window.dispatchEvent(new Event('test-webhook-triggered'));
   };
 
   return (
@@ -437,18 +509,15 @@ export default function App() {
           transition={{ duration: 0.8 }}
           className="min-h-screen bg-[#050B18] text-[#F0F6FF] font-sans overflow-x-hidden relative selection:bg-[#00D4FF]/30 selection:text-[#00D4FF]"
         >
-          {/* Custom Animated Interactive Cursor */}
           <CustomCursor />
 
-          {/* Background Noise and Cosmic Radial Atmospheres */}
+          {/* Background overlays & WebGL effects */}
           <div className="noise-overlay" />
-          
-          {/* Glowing colorful nebulas */}
           <div className="glow-blob w-[500px] h-[500px] top-[10%] right-[5%] bg-cyan-500/10" style={{ animationDelay: '0s' }} />
           <div className="glow-blob w-[600px] h-[600px] bottom-[15%] left-[2%] bg-purple-500/5" style={{ animationDelay: '4s' }} />
           <div className="glow-blob w-[450px] h-[450px] top-[60%] right-[10%] bg-pink-500/5" style={{ animationDelay: '2s' }} />
 
-          {/* Fixed Glassmorphism Floating Navbar */}
+          {/* Floating Glassmorphism Navbar */}
           <nav 
             className={`fixed top-6 left-1/2 -translate-x-1/2 px-6 py-3.5 rounded-full flex items-center justify-between z-50 w-[90%] max-w-[1000px] transition-all duration-300 border ${
               isScrolled 
@@ -458,9 +527,7 @@ export default function App() {
           >
             <div className="flex items-center gap-2.5">
               <div className="relative w-8 h-8 flex items-center justify-center">
-                {/* Rotating inner dash ring */}
                 <div className="absolute inset-0 rounded-full border border-dashed border-[#00D4FF]/30 animate-rotate-slow"></div>
-                {/* Hexagonal logo */}
                 <svg className="w-5 h-5 text-[#00D4FF]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polygon points="12 2 22 7.5 22 18.5 12 24 2 18.5 2 7.5" />
                 </svg>
@@ -471,7 +538,6 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-3 sm:gap-6 text-[11px] font-mono tracking-wider">
-              {/* Mute button */}
               <button 
                 onClick={handleToggleMute}
                 className="p-1.5 rounded-full border border-[#00D4FF]/10 bg-[#0A1628]/40 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/30 transition-all cursor-pointer"
@@ -480,11 +546,9 @@ export default function App() {
                 {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
               </button>
 
-              {/* Sign Out button */}
               <button
                 onClick={handleDisconnectGitHub}
-                className="transition-all px-3 py-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 cursor-pointer text-[10px] font-mono tracking-wider"
-                title="Disconnect your GitHub account and return to login page"
+                className="transition-all px-3 py-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 cursor-pointer text-[10px] font-mono tracking-wider font-semibold uppercase"
               >
                 Sign Out
               </button>
@@ -492,89 +556,94 @@ export default function App() {
           </nav>
 
           {/* Hero Section */}
-          <section id="hero" className="relative min-h-screen flex items-center justify-center pt-32 pb-16 overflow-hidden">
-            
-            {/* Interactive Particle 3D WebGL Canvas */}
+          <section id="hero" className="relative min-h-[85vh] flex items-center justify-center pt-32 pb-16 overflow-hidden">
             <ThreeHero />
 
-            {/* Subtle retro perspective grid background */}
             <div className="perspective-container">
               <div className="perspective-grid opacity-30" />
             </div>
 
             <div className="max-w-[1200px] w-full mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
-              
-              {/* Hero left text block */}
+              {/* Hero Left Info */}
               <motion.div 
                 initial={{ opacity: 0, x: -30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.1 }}
-                className="lg:col-span-7 space-y-8 text-left"
+                className="lg:col-span-7 space-y-6 text-left"
               >
-                
-                {/* Title with Layered Extrusion */}
                 <h1 className="text-4xl sm:text-5xl lg:text-7xl font-display font-extrabold tracking-tight text-white leading-[1.08] neon-extrusion-text">
                   Multi-Bot <br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4FF] via-[#7C3AED] to-[#FF3B6B]">
                     Hosting Platform
                   </span>
                 </h1>
-
+                <p className="text-xs sm:text-sm text-[#4A6080] font-sans max-w-lg leading-relaxed">
+                  A high-performance hosting platform to provision and run resilient Telegram Python daemon nodes 24x7. Managed through automated workflow integrations.
+                </p>
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      audio.playClick();
+                      setIsNewProjectOpen(true);
+                    }}
+                    className="px-6 py-3.5 rounded-xl bg-[#00D4FF] hover:bg-[#00D4FF]/90 text-[#050B18] font-sans text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-[#00D4FF]/10"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Deploy New Project
+                  </button>
+                </div>
               </motion.div>
 
-              {/* Hero right floating Stat Cards block */}
+              {/* Hero Right Metrics (Real Data Wired) */}
               <motion.div 
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.3 }}
-                className="lg:col-span-5 relative h-[420px] hidden lg:block"
+                className="lg:col-span-5 relative h-[380px] hidden lg:block"
               >
                 {/* Floating Card 1: Active Nodes */}
                 <div 
-                  className="absolute top-[5%] left-[5%] w-[270px] premium-glass-card rounded-2xl p-5 border-[#00D4FF]/20 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-300 hover:scale-[1.04] hover:border-[#00D4FF]/50"
+                  className="absolute top-[5%] left-[5%] w-[270px] premium-glass-card rounded-2xl p-5 border-[#00D4FF]/20 shadow-[0_20px_50px_rgba(0,0,0,0.6)] transition-all duration-300 hover:scale-[1.04]"
                   style={{ transform: 'perspective(600px) rotateX(10deg) rotateY(-8deg) translateZ(30px)' }}
                 >
-                  <div className="absolute top-0 left-0 w-12 h-[1px] bg-gradient-to-r from-[#00D4FF] to-transparent"></div>
                   <div className="flex items-center justify-between pb-3 border-b border-[#00D4FF]/10 mb-3">
-                    <span className="text-[9px] font-mono text-[#00D4FF] uppercase tracking-wider">// PLATFORM STATUS</span>
+                    <span className="text-[9px] font-mono text-[#00D4FF] uppercase tracking-wider">// SYSTEM STATUS</span>
                     <Server className="w-4 h-4 text-[#00D4FF]" />
                   </div>
                   <p className="text-3xl font-display font-bold text-white flex items-baseline gap-1">
-                    <AnimatedCounter value={3} />
+                    <AnimatedCounter value={stats.activeNodes} />
                     <span className="text-[#4A6080] text-sm">/</span>
-                    <AnimatedCounter value={3} />
+                    <AnimatedCounter value={activeProjects.length} />
                   </p>
                   <p className="text-[10px] text-[#4A6080] mt-1 font-sans">Active Serverless Nodes Online</p>
                 </div>
 
-                {/* Floating Card 2: Total Triggers */}
+                {/* Floating Card 2: Gateway Loads */}
                 <div 
-                  className="absolute top-[38%] left-[25%] w-[270px] premium-glass-card rounded-2xl p-5 border-[#7C3AED]/20 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-300 hover:scale-[1.04] hover:border-[#7C3AED]/50"
+                  className="absolute top-[38%] left-[25%] w-[270px] premium-glass-card rounded-2xl p-5 border-[#7C3AED]/20 shadow-[0_20px_50px_rgba(0,0,0,0.6)] transition-all duration-300 hover:scale-[1.04]"
                   style={{ transform: 'perspective(600px) rotateX(8deg) rotateY(12deg) translateZ(40px)' }}
                 >
-                  <div className="absolute top-0 left-0 w-12 h-[1px] bg-gradient-to-r from-[#7C3AED] to-transparent"></div>
                   <div className="flex items-center justify-between pb-3 border-b border-[#00D4FF]/10 mb-3">
                     <span className="text-[9px] font-mono text-[#7C3AED] uppercase tracking-wider">// TRIGGER LOAD</span>
                     <Zap className="w-4 h-4 text-[#7C3AED]" />
                   </div>
                   <p className="text-3xl font-display font-bold text-white">
-                    <AnimatedCounter value={totalRequests} />
+                    <AnimatedCounter value={stats.totalRequests} />
                   </p>
                   <p className="text-[10px] text-[#4A6080] mt-1 font-sans">Gateway Events Routed</p>
                 </div>
 
                 {/* Floating Card 3: Network Response */}
                 <div 
-                  className="absolute top-[70%] left-[10%] w-[270px] premium-glass-card rounded-2xl p-5 border-emerald-500/10 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-300 hover:scale-[1.04] hover:border-emerald-500/30"
+                  className="absolute top-[70%] left-[10%] w-[270px] premium-glass-card rounded-2xl p-5 border-emerald-500/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)] transition-all duration-300 hover:scale-[1.04]"
                   style={{ transform: 'perspective(600px) rotateX(-6deg) rotateY(-8deg) translateZ(20px)' }}
                 >
-                  <div className="absolute top-0 left-0 w-12 h-[1px] bg-gradient-to-r from-[#00FF87] to-transparent"></div>
                   <div className="flex items-center justify-between pb-3 border-b border-[#00D4FF]/10 mb-3">
                     <span className="text-[9px] font-mono text-[#00FF87] uppercase tracking-wider">// EDGE RESPONSE</span>
                     <Cpu className="w-4 h-4 text-[#00FF87]" />
                   </div>
                   <p className="text-3xl font-display font-bold text-white flex items-baseline">
-                    ~<AnimatedCounter value={responseTime} />
+                    ~<AnimatedCounter value={stats.latency} />
                     <span className="text-xs font-mono font-medium text-emerald-400 ml-1">ms</span>
                   </p>
                   <p className="text-[10px] text-[#4A6080] mt-1 font-sans">Global Routing Latency</p>
@@ -583,32 +652,27 @@ export default function App() {
             </div>
           </section>
 
-          {/* Main Container */}
+          {/* Main Dashboard Panel */}
           <div className="max-w-[1200px] mx-auto px-6 pb-24 relative z-10">
-            {/* Dashboard Section */}
-            <section id="dashboard-section" className="pt-8 pb-16">
+            <section id="dashboard-section" className="space-y-12">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.2 }}
-                className="premium-glass-card rounded-2xl border border-[#00D4FF]/10 bg-[#0A1628]/40 p-8 shadow-[0_30px_80px_rgba(0,0,0,0.6)] backdrop-blur-md relative overflow-hidden group transition-all duration-300 hover:border-[#00D4FF]/25"
-                style={{ transform: 'perspective(1000px)' }}
+                className="premium-glass-card rounded-2xl border border-[#00D4FF]/10 bg-[#0A1628]/40 p-8 shadow-[0_30px_80px_rgba(0,0,0,0.6)] backdrop-blur-md relative overflow-hidden"
               >
-                {/* Visual grid layout decoration inside card */}
                 <div className="absolute inset-0 card-grid-pattern opacity-5 pointer-events-none"></div>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-[#00D4FF]/5 to-transparent rounded-full filter blur-3xl pointer-events-none"></div>
 
-                {/* GitHub Profile Header */}
-                <div className="flex flex-col md:flex-row items-center md:justify-between gap-6 pb-8 border-b border-[#00D4FF]/10 mb-8 relative z-10">
+                {/* GitHub Profile Sync Header */}
+                <div className="flex flex-col md:flex-row items-center md:justify-between gap-6 pb-8 border-b border-[#00D4FF]/10 mb-10">
                   <div className="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left">
                     <div className="relative">
-                      {/* Avatar container with rotating border animation */}
                       <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#00D4FF]/30 animate-rotate-slow"></div>
                       <div className="p-1">
                         {gitHubUser?.avatar_url ? (
                           <img
                             src={gitHubUser.avatar_url}
-                            alt={gitHubUser.login || 'GitHub User'}
+                            alt={gitHubUser.login}
                             referrerPolicy="no-referrer"
                             className="w-16 h-16 rounded-full border border-[#00D4FF]/20 object-cover"
                           />
@@ -627,8 +691,8 @@ export default function App() {
 
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 justify-center sm:justify-start">
-                        <h2 className="text-xl font-display font-bold text-white tracking-tight">
-                          {gitHubUser?.name || gitHubUser?.login || 'Connecting GitHub...'}
+                        <h2 className="text-lg font-display font-bold text-white tracking-tight">
+                          {gitHubUser?.name || gitHubUser?.login || 'Connecting Developer...'}
                         </h2>
                         {gitHubUser?.login && (
                           <span className="text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20">
@@ -639,11 +703,6 @@ export default function App() {
                       <p className="text-xs text-[#4A6080] font-sans">
                         {gitHubUser?.bio || gitHubUser?.html_url || 'Active developer session synchronized.'}
                       </p>
-                      {gitHubUser?.public_repos !== undefined && (
-                        <p className="text-[10px] font-mono text-cyan-400">
-                          Repositories available: {gitHubUser.public_repos} public
-                        </p>
-                      )}
                     </div>
                   </div>
 
@@ -653,179 +712,184 @@ export default function App() {
                       onClick={() => githubToken && fetchGitHubUserAndRepos(githubToken)}
                       disabled={isFetchingRepos || isFetchingUser}
                       className="p-2.5 rounded-xl border border-[#00D4FF]/10 bg-[#050B18]/60 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/35 transition-all cursor-pointer disabled:opacity-40"
-                      title="Reload repositories"
+                      title="Reload integrations"
                     >
                       <RefreshCw className={`w-4 h-4 ${(isFetchingRepos || isFetchingUser) ? 'animate-spin text-[#00D4FF]' : ''}`} />
                     </button>
                     <button
                       type="button"
                       onClick={handleDisconnectGitHub}
-                      className="px-4 py-2 rounded-xl border border-rose-500/20 bg-rose-500/5 text-rose-400 hover:bg-rose-500/10 transition-all font-mono text-[10px] uppercase tracking-wider cursor-pointer"
+                      className="px-4 py-2 rounded-xl border border-rose-500/20 bg-rose-500/5 text-rose-400 hover:bg-rose-500/10 transition-all font-mono text-[10px] uppercase tracking-wider cursor-pointer font-bold"
                     >
                       Disconnect Node
                     </button>
                   </div>
                 </div>
 
-                {/* Deployment Form */}
-                <form onSubmit={handleDeployBot} className="space-y-6 relative z-10">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Repository Selector Dropdown */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4A6080] flex items-center gap-1.5">
-                        <Github className="w-3.5 h-3.5 text-[#00D4FF]" />
-                        1. Target GitHub Repository
-                      </label>
-                      <div className="relative">
-                        {isFetchingRepos ? (
-                          <div className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 rounded-xl px-4 py-3.5 text-xs text-[#4A6080] flex items-center gap-2">
-                            <Loader2 className="w-3.5 h-3.5 text-[#00D4FF] animate-spin" />
-                            <span>Retrieving repositories from GitHub API...</span>
+                {/* Dashboard Metrics Panels (Real Data Wired) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
+                  <CircularProgress
+                    value={stats.cpu}
+                    max={100}
+                    label="CPU Allocation"
+                    unit="%"
+                    color="#00D4FF"
+                  />
+                  <CircularProgress
+                    value={stats.memory}
+                    max={512}
+                    label="Memory Utilization"
+                    unit="MB"
+                    color="#7C3AED"
+                  />
+                  <CircularProgress
+                    value={stats.latency}
+                    max={150}
+                    label="System Latency"
+                    unit="ms"
+                    color="#00FF87"
+                  />
+                </div>
+
+                {/* Projects Section Grid */}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between pb-4 border-b border-[#00D4FF]/5">
+                    <h3 className="text-sm font-display font-extrabold text-[#F0F6FF] tracking-wider uppercase">
+                      Active Deployment Nodes
+                    </h3>
+                    <span className="text-[10px] font-mono text-[#00D4FF] font-semibold">
+                      {activeProjects.length} Nodes Configured
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Add Project Card Button */}
+                    <AddProjectCard onClick={() => setIsNewProjectOpen(true)} />
+
+                    {/* Active Deployed Project Cards */}
+                    {activeProjects.map((project) => {
+                      const isOnline = project.status === 'online';
+                      const isLoadingAction = botActionLoading === project.repo_name;
+
+                      return (
+                        <div
+                          key={project.id}
+                          className="premium-glass-card rounded-2xl p-5 border border-[#00D4FF]/10 bg-[#050B18]/40 flex flex-col justify-between min-h-[240px] relative overflow-hidden group hover:border-[#00D4FF]/30 transition-all duration-300"
+                        >
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#00D4FF]/5 to-transparent rounded-full filter blur-xl pointer-events-none"></div>
+
+                          <div className="space-y-4">
+                            {/* Card status and username line */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-mono text-[#4A6080] tracking-wider truncate max-w-[150px]" title={project.repo_name}>
+                                {project.repo_name}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-[#4A6080]/40'}`}></span>
+                                <span className={`text-[9px] font-mono uppercase font-bold tracking-widest ${isOnline ? 'text-emerald-400' : 'text-[#4A6080]'}`}>
+                                  {project.status}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Bot Details */}
+                            <div className="space-y-1">
+                              <a
+                                href={`https://t.me/${project.username}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm font-display font-extrabold text-white hover:text-[#00D4FF] transition-all flex items-center gap-1.5"
+                              >
+                                @{project.username}
+                                <ExternalLink className="w-3.5 h-3.5 text-[#4A6080] group-hover:text-[#00D4FF]" />
+                              </a>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-mono tracking-widest px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase font-semibold">
+                                  {project.script_name.replace('.py', '')}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Live Telemetry inside Card */}
+                            <div className="pt-3 border-t border-[#00D4FF]/5 grid grid-cols-2 gap-2 font-mono text-[10px]">
+                              <div>
+                                <span className="text-[#4A6080] block">TRIGGER HIT</span>
+                                <span className="text-white font-bold">{project.request_count} times</span>
+                              </div>
+                              <div>
+                                <span className="text-[#4A6080] block">PROVISIONED</span>
+                                <span className="text-white">
+                                  {new Date(project.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                        ) : (
-                          <select
-                            value={selectedRepo}
-                            onChange={(e) => setSelectedRepo(e.target.value)}
-                            required
-                            className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#00D4FF] focus:ring-1 focus:ring-[#00D4FF] rounded-xl px-4 py-3.5 text-xs text-[#F0F6FF] font-mono outline-none transition-all cursor-pointer"
-                          >
-                            {repos.length === 0 ? (
-                              <option value="">No repositories found</option>
+
+                          {/* Quick controls bar */}
+                          <div className="flex items-center gap-2 pt-4 border-t border-[#00D4FF]/5">
+                            {isOnline ? (
+                              <button
+                                onClick={() => handleStopBot(project.repo_name)}
+                                disabled={isLoadingAction}
+                                className="flex-1 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+                              >
+                                {isLoadingAction ? (
+                                  <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                                ) : (
+                                  <>
+                                    <Power className="w-3 h-3" />
+                                    Stop Node
+                                  </>
+                                )}
+                              </button>
                             ) : (
-                              repos.map((repo) => (
-                                <option key={repo.id || repo.full_name} value={repo.full_name}>
-                                  {repo.full_name} {repo.private ? '🔒' : '🌐'}
-                                </option>
-                              ))
+                              <button
+                                onClick={() => handleStartBot(project)}
+                                disabled={isLoadingAction}
+                                className="flex-1 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+                              >
+                                {isLoadingAction ? (
+                                  <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+                                ) : (
+                                  <>
+                                    <Play className="w-3 h-3 fill-current" />
+                                    Start Node
+                                  </>
+                                )}
+                              </button>
                             )}
-                          </select>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-[#4A6080] font-sans">
-                        Select the repository where the loop runner & Python bot agent files will be injected.
-                      </p>
-                    </div>
 
-                    {/* Script Selector Dropdown */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4A6080] flex items-center gap-1.5">
-                        <Code className="w-3.5 h-3.5 text-[#7C3AED]" />
-                        2. Python Bot Script Template
-                      </label>
-                      <select
-                        value={selectedScript}
-                        onChange={(e) => setSelectedScript(e.target.value)}
-                        required
-                        className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] rounded-xl px-4 py-3.5 text-xs text-[#F0F6FF] font-mono outline-none transition-all cursor-pointer"
-                      >
-                        <option value="movie_bot.py">movie_bot.py (Movie catalog suggestions agent)</option>
-                        <option value="management_bot.py">management_bot.py (Customer support ticketing & management agent)</option>
-                        <option value="custom_mod_bot.py">custom_mod_bot.py (Custom moderation & feedback logging agent)</option>
-                      </select>
-                      <p className="text-[10px] text-[#4A6080] font-sans">
-                        Choose the pre-built functional template to host. Both support auto-polling on actions.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Telegram Bot Token Input */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4A6080] flex items-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-[#FF3B6B]" />
-                      3. Telegram Bot Token
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="password"
-                        placeholder="1234567890:ABCDefGhIJKlmNoPQRsTUVwxyZ..."
-                        value={botToken}
-                        onChange={(e) => setBotToken(e.target.value)}
-                        required
-                        className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#FF3B6B] focus:ring-1 focus:ring-[#FF3B6B] rounded-xl px-4 py-3.5 pl-11 text-xs text-[#F0F6FF] font-mono outline-none transition-all placeholder:text-[#4A6080]"
-                      />
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                        <Bot className="w-4 h-4 text-[#FF3B6B]" />
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-[#4A6080] font-sans">
-                      Token provided by Telegram's @BotFather when creating a new bot. Keep this strictly confidential.
-                    </p>
-                  </div>
-
-                  {/* Feedback Status / Error Messages */}
-                  {deployError && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-4 rounded-xl border border-rose-500/20 bg-rose-500/5 text-rose-400 text-xs flex items-start gap-2.5 font-sans"
-                    >
-                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
-                      <div>
-                        <strong className="font-bold">Deployment Interrupted:</strong> {deployError}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {deployResult && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 font-sans"
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
-                        <div>
-                          <strong className="font-bold text-white block mb-0.5 text-sm uppercase tracking-wider">SYSTEM ACTIVE</strong>
-                          <p className="text-[#4A6080] text-xs leading-relaxed">
-                            {deployResult.message}
-                          </p>
-                          <div className="mt-2 space-y-1 font-mono text-[11px] text-[#4A6080]">
-                            <div>Target Repository: <span className="text-white">{deployResult.repo_name}</span></div>
-                            <div>Bot Username: <span className="text-cyan-400">@{deployResult.username}</span></div>
-                            <div>Template Deployed: <span className="text-purple-400">{deployResult.bot_type}</span></div>
+                            <button
+                              onClick={() => handleDeleteProject(project.repo_name)}
+                              disabled={isLoadingAction}
+                              className="p-2 rounded-xl border border-rose-500/15 text-rose-400/60 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer disabled:opacity-40"
+                              title="Delete project from dashboard"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
-                      </div>
-                      <a
-                        href={`https://t.me/${deployResult.username}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 active:scale-95 transition-all text-xs font-bold font-sans uppercase tracking-wider text-white text-center inline-block"
-                      >
-                        Launch Telegram Agent
-                      </a>
-                    </motion.div>
-                  )}
-
-                  {/* Action Deploy Button */}
-                  <div className="pt-4">
-                    <button
-                      type="submit"
-                      disabled={isDeploying || isFetchingRepos}
-                      className="w-full py-4 rounded-xl bg-gradient-to-r from-[#00D4FF] to-[#7C3AED] hover:opacity-95 active:scale-[0.99] transition-all text-xs font-bold font-sans uppercase tracking-widest text-white shadow-lg shadow-[#00D4FF]/15 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
-                    >
-                      {isDeploying ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin text-white" />
-                          PROVISIONING CORE WORKFLOWS...
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="w-4 h-4 text-white" />
-                          Deploy Node & Run 24x7
-                        </>
-                      )}
-                    </button>
+                      );
+                    })}
                   </div>
-                </form>
+                </div>
               </motion.div>
             </section>
 
-            {/* Minimalist Footer */}
             <footer className="pt-24 border-t border-[#00D4FF]/10 text-center text-[10px] font-mono text-[#4A6080]">
-              <p>Multi-Bot Hosting Platform  —  Built on FastAPI & Vercel  —  2026</p>
+              <p>Multi-Bot Hosting Platform  —  Built on Express & Vercel-style Actions  —  2026</p>
             </footer>
           </div>
+
+          {/* Vercel-Style Integration Multi-Step Wizard Modal */}
+          <NewProjectModal
+            isOpen={isNewProjectOpen}
+            onClose={() => setIsNewProjectOpen(false)}
+            repos={repos}
+            isFetchingRepos={isFetchingRepos}
+            githubToken={githubToken || 'demo_github_token'}
+            onDeploySuccess={fetchProjectsAndStats}
+          />
         </motion.div>
       )}
     </AnimatePresence>
