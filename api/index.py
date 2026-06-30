@@ -1,6 +1,7 @@
 import os
 import logging
 import base64
+import json
 from typing import Optional, List
 from fastapi import FastAPI, Request, Response, status, Query, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -152,29 +153,22 @@ def send_welcome(message):
 
 @bot.message_handler(commands=['list'])
 def list_movies(message):
-    movie_list = "Available Movie Database:\\n\\n" + "\\n".join([f"Movie: {k.replace('_', ' ').title()}" for k in MOVIES.keys()])
-    movie_list += "\\n\\nUse /movie <name> (e.g. /movie inception) to see full details!"
+    movie_list = "Available Movies:\\n" + "\\n".join([f"- *{m['title']}*" for m in MOVIES.values()])
     bot.reply_to(message, movie_list)
 
 @bot.message_handler(commands=['movie'])
-def movie_detail(message):
+def search_movie(message):
     args = message.text.split()
     if len(args) < 2:
-        bot.reply_to(message, "Please specify a movie name! Usage: /movie inception or /movie interstellar.")
+        bot.reply_to(message, "Please specify a movie name. Example: /movie inception")
         return
-        
-    query = "_".join(args[1:]).lower()
+    query = args[1].lower()
     if query in MOVIES:
         m = MOVIES[query]
-        res = (
-            f"{m['title']}\\n\\n"
-            f"Genre: {m['genre']}\\n"
-            f"Rating: {m['rating']}\\n\\n"
-            f"Synopsis: {m['desc']}"
-        )
-        bot.reply_to(message, res)
+        info = f"*{m['title']}*\\n\\n*Genre:* {m['genre']}\\n*Rating:* {m['rating']}\\n\\n{m['desc']}"
+        bot.reply_to(message, info)
     else:
-        bot.reply_to(message, f"Movie '{args[1]}' was not found in our current showcase database. Try /list to view available names.")
+        bot.reply_to(message, "Movie not found. Try 'inception', 'interstellar' or 'dark_knight'!")
 
 @bot.message_handler(func=lambda message: True)
 def echo_all(message):
@@ -307,886 +301,643 @@ class LaunchRequest(BaseModel):
     repo_name: str
     bot_token: str
     script_name: str
-    github_token: str
+    github_token: Optional[str] = None
 
 class StopRequest(BaseModel):
     repo_name: str
-    github_token: str
+    github_token: Optional[str] = None
 
-# Embedded sleek, dark-themed 3D dashboard layout (absolutely NO emojis)
+# Sleek, premium dark cyberpunk single-page Vercel-like dashboard (absolutely NO simulated demo modes)
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Bot Hosting Platform</title>
+    <title>Multi-Bot Hoster — Import & Deploy</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-                        mono: ['"JetBrains Mono"', 'monospace'],
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        cyber: {
+                            bg: '#030712',
+                            card: '#0B111E',
+                            border: '#1E293B',
+                            accent: '#00D4FF',
+                            purple: '#7C3AED',
+                        }
                     }
                 }
             }
         }
     </script>
     <style>
-        .glass-panel {
-            background: rgba(10, 15, 30, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        body {
+            background-color: #030712;
+            color: #F8FAFC;
         }
-        .glow-cyan {
-            box-shadow: 0 0 20px rgba(6, 182, 212, 0.25);
+        .neon-border {
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.08);
         }
-        .glow-violet {
-            box-shadow: 0 0 20px rgba(139, 92, 246, 0.25);
+        .glow-button {
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.25);
         }
-        .terminal-container {
-            background: rgba(4, 7, 15, 0.95);
-            position: relative;
-        }
-        .terminal-container::before {
-            content: " ";
-            display: block;
-            position: absolute;
-            top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
-            z-index: 2;
-            background-size: 100% 4px;
-            pointer-events: none;
-        }
-        ::-webkit-scrollbar {
+        .scroll-custom::-webkit-scrollbar {
             width: 6px;
-            height: 6px;
         }
-        ::-webkit-scrollbar-track {
-            background: rgba(15, 23, 42, 0.5);
+        .scroll-custom::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
         }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(6, 182, 212, 0.3);
+        .scroll-custom::-webkit-scrollbar-thumb {
+            background: #1E293B;
             border-radius: 3px;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(6, 182, 212, 0.5);
-        }
-        
-        .card-3d {
-            transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.5s ease;
-            transform-style: preserve-3d;
-            perspective: 1000px;
-        }
-        .card-3d:hover {
-            transform: translateY(-4px) rotateX(1deg) rotateY(1deg);
-            box-shadow: 0 15px 35px rgba(6, 182, 212, 0.15);
-        }
-        
-        .nav-btn-active {
-            color: #22d3ee;
-            background: rgba(6, 182, 212, 0.1);
-            border-left: 3px solid #22d3ee;
+        .scroll-custom::-webkit-scrollbar-thumb:hover {
+            background: #00D4FF;
         }
     </style>
 </head>
-<body class="bg-[#020617] text-slate-100 font-sans min-h-screen overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-200">
-    
-    <!-- Left Static Sidebar -->
-    <aside class="fixed inset-y-0 left-0 w-64 glass-panel border-r border-slate-800/80 flex flex-col z-50">
-        <div class="p-6 border-b border-slate-800/80">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-violet-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-                    <i data-lucide="cpu" class="w-5 h-5 text-white"></i>
+<body class="font-sans antialiased min-h-screen flex flex-col justify-between">
+
+    <!-- Top Grid and Ambient Light Effects -->
+    <div class="absolute inset-x-0 top-0 h-[450px] bg-gradient-to-b from-[#00D4FF]/10 to-transparent pointer-events-none z-0"></div>
+    <div class="absolute top-[-100px] left-[50%] translate-x-[-50%] w-[600px] h-[250px] bg-[#7C3AED]/12 blur-[120px] pointer-events-none z-0"></div>
+
+    <!-- Header / Navigation Bar -->
+    <header class="w-full border-b border-slate-800/60 bg-cyber-bg/85 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyber-accent to-cyber-purple flex items-center justify-center shadow-[0_0_15px_rgba(0,212,255,0.3)]">
+                    <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
                 </div>
                 <div>
-                    <h1 class="text-xs font-bold uppercase tracking-widest text-slate-400">Daemon Engine</h1>
-                    <p class="text-sm font-extrabold text-white">Multi-Bot Platform</p>
+                    <span class="font-extrabold tracking-wider text-sm bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">MULTI-BOT</span>
+                    <span class="text-[9px] block font-mono tracking-widest text-cyber-accent -mt-0.5">DEPLOYMENT ENGINE</span>
+                </div>
+            </div>
+
+            <!-- Header Actions / Authenticated User Display -->
+            <div id="user-header-section" class="flex items-center gap-4">
+                <!-- Will be dynamically populated -->
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-4xl w-full mx-auto px-4 py-12 relative z-10 flex-grow flex flex-col justify-center">
+
+        <!-- 1. UNAUTHENTICATED STATE: LANDING & LOGIN -->
+        <div id="state-unauthenticated" class="hidden text-center py-8">
+            <div class="inline-flex items-center gap-2.5 px-4 py-1.5 bg-cyber-card border border-slate-800 rounded-full text-xs text-cyber-accent font-mono mb-6 neon-border">
+                <span class="w-2 h-2 rounded-full bg-cyber-accent animate-pulse"></span>
+                ACTIVE PIPELINE GATEWAY
+            </div>
+            
+            <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-white mb-6">
+                Host Your Bots <br>
+                <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyber-accent via-cyan-400 to-cyber-purple">Endlessly 24x7</span>
+            </h1>
+
+            <p class="text-slate-400 text-sm sm:text-base max-w-xl mx-auto mb-10 leading-relaxed">
+                Connect your GitHub account to instantly import and deploy interactive Telegram bots. Powered by continuous Actions container orchestration.
+            </p>
+
+            <button onclick="handleConnectGitHub()" class="px-8 py-4 bg-white hover:bg-slate-100 text-slate-950 font-bold rounded-xl text-sm tracking-wide transition-all duration-200 inline-flex items-center gap-3 cursor-pointer shadow-lg hover:scale-[1.02] active:scale-[0.98]">
+                <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                Connect with GitHub
+            </button>
+
+            <!-- Feature highlights bento-like grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto mt-20 text-left">
+                <div class="bg-cyber-card border border-slate-800/80 rounded-2xl p-6 hover:border-slate-700/60 transition-all">
+                    <div class="w-10 h-10 rounded-xl bg-cyber-accent/10 border border-cyber-accent/20 flex items-center justify-center text-cyber-accent mb-4">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15H15M15 15h6v-6"/></svg>
+                    </div>
+                    <h3 class="text-sm font-semibold text-white mb-2 font-mono uppercase tracking-wider">Endless Auto-Recycling</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Workflows auto-dispatch every 5.5 hours, bypassing standard limits to keep your agents live indefinitely.</p>
+                </div>
+                <div class="bg-cyber-card border border-slate-800/80 rounded-2xl p-6 hover:border-slate-700/60 transition-all">
+                    <div class="w-10 h-10 rounded-xl bg-[#A855F7]/10 border border-[#A855F7]/20 flex items-center justify-center text-[#A855F7] mb-4">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </div>
+                    <h3 class="text-sm font-semibold text-white mb-2 font-mono uppercase tracking-wider">Zero Config Launch</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">No local hosting required. The platform generates code, handles dependencies, and provisions runners.</p>
+                </div>
+                <div class="bg-cyber-card border border-slate-800/80 rounded-2xl p-6 hover:border-slate-700/60 transition-all">
+                    <div class="w-10 h-10 rounded-xl bg-[#22C55E]/10 border border-[#22C55E]/20 flex items-center justify-center text-[#22C55E] mb-4">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    </div>
+                    <h3 class="text-sm font-semibold text-white mb-2 font-mono uppercase tracking-wider">Secure Token Handling</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Tokens and API secrets are securely passed directly into GitHub Action environment variables, ensuring privacy.</p>
                 </div>
             </div>
         </div>
-        
-        <nav class="flex-1 p-4 space-y-2" id="sidebar-nav">
-            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-cyan-400 bg-cyan-500/10 border-l-3 border-cyan-500">
-                <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-                Dashboard
-            </button>
-            
-            <button onclick="switchTab('status')" id="nav-status" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-slate-400 hover:text-white hover:bg-slate-800/50">
-                <i data-lucide="activity" class="w-4 h-4"></i>
-                System Status
-            </button>
-            
-            <button onclick="switchTab('nodes')" id="nav-nodes" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-slate-400 hover:text-white hover:bg-slate-800/50">
-                <i data-lucide="server" class="w-4 h-4"></i>
-                Active Nodes
-                <span id="active-nodes-badge" class="ml-auto bg-cyan-500/15 text-cyan-400 text-[10px] font-mono px-2 py-0.5 rounded-full border border-cyan-500/20 hidden">0</span>
-            </button>
-        </nav>
 
-        <div class="p-4 border-t border-slate-800/80" id="session-footer">
-            <div class="flex items-center gap-3 p-2 rounded-lg bg-slate-900/50 border border-slate-800">
-                <div id="user-avatar" class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center overflow-hidden">
-                    <i data-lucide="user" class="w-4 h-4 text-slate-400"></i>
+        <!-- 2. AUTHENTICATED STATE — STEP 1: REPOSITORY IMPORT LIST -->
+        <div id="state-step1-repos" class="hidden">
+            <div class="mb-8">
+                <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-1.5">Import Git Repository</h2>
+                <p class="text-xs sm:text-sm text-slate-400">Select a GitHub repository to inject bot workflows and deploy.</p>
+            </div>
+
+            <!-- Repo Search Bar -->
+            <div class="mb-6 relative">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 </div>
-                <div class="min-w-0 flex-1">
-                    <p id="user-display-name" class="text-xs font-semibold text-white truncate">Guest Session</p>
-                    <p id="user-github-handle" class="text-[10px] text-slate-500 font-mono truncate">Not Connected</p>
+                <input type="text" id="repo-search-input" oninput="filterRepositories()" placeholder="Search repositories..." class="w-full bg-cyber-card border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-cyber-accent focus:ring-1 focus:ring-cyber-accent font-mono transition-all">
+            </div>
+
+            <!-- Repository Scrollable Container -->
+            <div class="bg-cyber-card border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                <div id="repos-container" class="max-h-[380px] overflow-y-auto scroll-custom divide-y divide-slate-800/60">
+                    <!-- Loading Skeletons by default -->
+                    <div class="p-6 text-center text-slate-500 font-mono text-sm flex flex-col items-center justify-center gap-3">
+                        <div class="w-6 h-6 border-2 border-t-transparent border-cyber-accent rounded-full animate-spin"></div>
+                        Fetching repositories from GitHub...
+                    </div>
                 </div>
-                <button onclick="logout()" id="logout-btn" class="p-1.5 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all hidden" title="Sign Out">
-                    <i data-lucide="log-out" class="w-4 h-4"></i>
-                </button>
             </div>
         </div>
-    </aside>
 
-    <!-- Main Content Area -->
-    <main class="ml-64 p-8 min-h-screen">
-        <div class="max-w-6xl mx-auto space-y-8">
-            
-            <!-- Header Bar -->
-            <header class="flex items-center justify-between border-b border-slate-800/80 pb-6">
+        <!-- 3. CONFIGURATION PANEL — STEP 2 -->
+        <div id="state-step2-config" class="hidden">
+            <!-- Back navigation button -->
+            <button onclick="goToStep1()" class="mb-6 text-xs text-slate-400 hover:text-white transition-all inline-flex items-center gap-2 font-mono uppercase font-bold cursor-pointer">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                Back to Repositories
+            </button>
+
+            <div class="mb-8">
+                <span class="text-[10px] font-mono tracking-widest text-cyber-accent uppercase font-bold bg-cyber-accent/10 px-2.5 py-1 rounded border border-cyber-accent/15">Configuration</span>
+                <h2 id="selected-repo-title" class="text-xl sm:text-2xl font-extrabold tracking-tight text-white mt-4 font-mono truncate">owner / repo-name</h2>
+                <p class="text-xs text-slate-400 mt-1">Configure environment tokens and select bot engine template below.</p>
+            </div>
+
+            <!-- Main Config Form -->
+            <div class="bg-cyber-card border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+                <!-- Token input -->
                 <div>
-                    <h2 id="page-title" class="text-2xl font-bold tracking-tight text-white">Dashboard Console</h2>
-                    <p class="text-xs text-slate-400 font-mono">NODE HOST: <span class="text-cyan-400">VERCEL-DEEP-EDGE</span> | ROUTER: <span class="text-cyan-400">ACTIVE</span></p>
-                </div>
-                
-                <div class="flex items-center gap-4">
-                    <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        GATEWAY STATUS: ONLINE
-                    </div>
-                </div>
-            </header>
-
-            <!-- PHASE 1: Authentication Screen -->
-            <section id="auth-screen" class="space-y-8">
-                <div class="text-center max-w-lg mx-auto space-y-4 py-8">
-                    <h3 class="text-xl font-bold text-white">Deploy Multi-Bots in Seconds</h3>
-                    <p class="text-sm text-slate-400">Authenticate with GitHub or provide a Personal Access Token to inject and run continuous telegram bot daemons 24x7.</p>
-                </div>
-                
-                <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                    <!-- Path A: OAuth Login -->
-                    <div class="card-3d glass-panel rounded-2xl p-8 flex flex-col justify-between border border-slate-800 relative overflow-hidden group">
-                        <div class="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none"></div>
-                        <div class="space-y-6">
-                            <div class="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-                                <i data-lucide="github" class="w-6 h-6"></i>
-                            </div>
-                            <div class="space-y-2">
-                                <h4 class="text-lg font-bold text-white">Continue with GitHub</h4>
-                                <p class="text-xs text-slate-400 leading-relaxed">Securely authorize via OAuth. This grants temporary, restricted repository access to deploy workflow runtimes dynamically.</p>
-                            </div>
-                        </div>
-                        <div class="pt-8">
-                            <button onclick="loginWithGitHub()" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-slate-950 font-bold text-sm tracking-wide transition-all shadow-lg hover:shadow-cyan-500/10 flex items-center justify-center gap-2">
-                                <i data-lucide="shield-check" class="w-4 h-4"></i>
-                                Authorize OAuth Connection
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Path B: Manual Username + PAT -->
-                    <div class="card-3d glass-panel rounded-2xl p-8 flex flex-col justify-between border border-slate-800 relative overflow-hidden group">
-                        <div class="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl pointer-events-none"></div>
-                        <div class="space-y-6">
-                            <div class="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
-                                <i data-lucide="key" class="w-6 h-6"></i>
-                            </div>
-                            <div class="space-y-2">
-                                <h4 class="text-lg font-bold text-white">Manual Token Integration</h4>
-                                <p class="text-xs text-slate-400 leading-relaxed">Prefer manual configuration? Provide your GitHub Username and a Personal Access Token with repository scope permissions.</p>
-                            </div>
-                            
-                            <div class="space-y-4 pt-2">
-                                <div class="space-y-1.5">
-                                    <label class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">GitHub Username</label>
-                                    <input type="text" id="manual-username" placeholder="example: octocat" class="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-violet-500 transition-all">
-                                </div>
-                                <div class="space-y-1.5">
-                                    <label class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Personal Access Token (PAT)</label>
-                                    <input type="password" id="manual-pat" placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxx" class="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-violet-500 transition-all">
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="pt-6">
-                            <button onclick="loginManually()" class="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-850 text-white font-semibold text-sm border border-slate-700 hover:border-slate-600 transition-all flex items-center justify-center gap-2">
-                                Connect Manually
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- PHASE 2: Main Application Dashboard Panel -->
-            <section id="dashboard-section" class="grid lg:grid-cols-12 gap-8 hidden">
-                <!-- Deploy Form -->
-                <div class="lg:col-span-5 space-y-6">
-                    <div class="glass-panel rounded-2xl p-6 border border-slate-800">
-                        <div class="flex items-center gap-2.5 mb-6">
-                            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 border border-cyan-500/20">
-                                <i data-lucide="rocket" class="w-4 h-4"></i>
-                            </div>
-                            <h3 class="text-base font-bold text-white">Deploy Node Daemon</h3>
-                        </div>
-                        
-                        <form id="deploy-form" class="space-y-5" onsubmit="handleDeploy(event)">
-                            <!-- Repository Selection -->
-                            <div class="space-y-1.5">
-                                <label class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 flex justify-between">
-                                    <span>Select Repository</span>
-                                    <span onclick="refreshRepos()" class="text-cyan-400 hover:text-cyan-300 cursor-pointer flex items-center gap-1">
-                                        <i data-lucide="refresh-cw" class="w-3 h-3" id="repo-refresh-icon"></i>
-                                        Sync Repos
-                                    </span>
-                                </label>
-                                <select id="repo-select" required class="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 transition-all">
-                                    <option value="">Fetching repository list...</option>
-                                </select>
-                            </div>
-                            
-                            <!-- Telegram Token -->
-                            <div class="space-y-1.5">
-                                <label class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Telegram Bot Token</label>
-                                <input type="password" id="bot-token" required placeholder="example: 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ" class="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-cyan-500 transition-all">
-                            </div>
-                            
-                            <!-- Script Template -->
-                            <div class="space-y-1.5">
-                                <label class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Script Template</label>
-                                <select id="script-template" required class="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 transition-all">
-                                    <option value="movie_bot.py">movie_bot.py (Movie catalog suggestions agent)</option>
-                                    <option value="management_bot.py">management_bot.py (Customer support ticketing & management agent)</option>
-                                    <option value="custom_mod_bot.py">custom_mod_bot.py (Custom moderation & feedback logging agent)</option>
-                                </select>
-                            </div>
-                            
-                            <!-- Launch Button -->
-                            <button type="submit" id="deploy-submit-btn" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 hover:from-cyan-400 hover:to-violet-500 text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-cyan-500/5 flex items-center justify-center gap-2">
-                                <i data-lucide="play" class="w-4 h-4"></i>
-                                Deploy Node & Run 24x7
-                            </button>
-                        </form>
-                    </div>
-                </div>
-                
-                <!-- Terminal Window -->
-                <div class="lg:col-span-7 space-y-6 flex flex-col h-full">
-                    <div class="terminal-container rounded-2xl border border-slate-800 overflow-hidden flex flex-col flex-1 shadow-2xl">
-                        <div class="bg-slate-950/80 px-4 py-3 border-b border-slate-800/80 flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <div class="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
-                                <div class="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
-                                <div class="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-                            </div>
-                            <div class="text-[10px] font-mono text-slate-500">SYSTEM LOG CONSOLE</div>
-                            <button onclick="clearTerminal()" class="text-[10px] font-mono text-slate-400 hover:text-white transition-all">Clear</button>
-                        </div>
-                        
-                        <div id="terminal-body" class="p-6 font-mono text-xs text-slate-300 leading-relaxed overflow-y-auto h-[400px]">
-                            <div class="text-cyan-500">[SYSTEM] Connection established with platform API server.</div>
-                            <div class="text-slate-500">[SYSTEM] Ready for telemetry ingestion and log capture.</div>
-                            <div class="text-slate-500">[SYSTEM] Click Deploy to initiate secure actions build pipelines.</div>
-                            <span class="block-cursor" id="terminal-cursor"></span>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- SECTION: System Status -->
-            <section id="status-section" class="space-y-8 hidden">
-                <!-- Metrics Gauges Grid -->
-                <div class="grid md:grid-cols-3 gap-6">
-                    <!-- CPU Status Card -->
-                    <div class="glass-panel rounded-2xl p-6 border border-slate-800 flex flex-col items-center text-center">
-                        <div class="relative w-28 h-28 flex items-center justify-center mb-4">
-                            <svg class="w-full h-full transform -rotate-90">
-                                <circle cx="56" cy="56" r="48" stroke="rgba(15, 23, 42, 0.8)" stroke-width="8" fill="transparent"></circle>
-                                <circle cx="56" cy="56" r="48" stroke="rgb(6, 182, 212)" stroke-width="8" fill="transparent" stroke-dasharray="301.6" stroke-dashoffset="240" id="cpu-gauge" class="transition-all duration-1000"></circle>
-                            </svg>
-                            <div class="absolute text-center">
-                                <span id="cpu-val" class="text-xl font-extrabold text-white">20</span>
-                                <span class="text-[10px] text-slate-500 block font-mono">CPU %</span>
-                            </div>
-                        </div>
-                        <h4 class="text-sm font-bold text-slate-300">Cluster Compute</h4>
-                        <p class="text-xs text-slate-500 mt-1 font-mono">STATUS: OPTIMAL</p>
-                    </div>
-
-                    <!-- RAM Status Card -->
-                    <div class="glass-panel rounded-2xl p-6 border border-slate-800 flex flex-col items-center text-center">
-                        <div class="relative w-28 h-28 flex items-center justify-center mb-4">
-                            <svg class="w-full h-full transform -rotate-90">
-                                <circle cx="56" cy="56" r="48" stroke="rgba(15, 23, 42, 0.8)" stroke-width="8" fill="transparent"></circle>
-                                <circle cx="56" cy="56" r="48" stroke="rgb(139, 92, 246)" stroke-width="8" fill="transparent" stroke-dasharray="301.6" stroke-dashoffset="160" id="ram-gauge" class="transition-all duration-1000"></circle>
-                            </svg>
-                            <div class="absolute text-center">
-                                <span id="ram-val" class="text-xl font-extrabold text-white">47</span>
-                                <span class="text-[10px] text-slate-500 block font-mono">RAM %</span>
-                            </div>
-                        </div>
-                        <h4 class="text-sm font-bold text-slate-300">Heap Allocation</h4>
-                        <p class="text-xs text-slate-500 mt-1 font-mono">STATUS: STEADY</p>
-                    </div>
-
-                    <!-- Latency Status Card -->
-                    <div class="glass-panel rounded-2xl p-6 border border-slate-800 flex flex-col items-center text-center">
-                        <div class="relative w-28 h-28 flex items-center justify-center mb-4">
-                            <svg class="w-full h-full transform -rotate-90">
-                                <circle cx="56" cy="56" r="48" stroke="rgba(15, 23, 42, 0.8)" stroke-width="8" fill="transparent"></circle>
-                                <circle cx="56" cy="56" r="48" stroke="rgb(16, 185, 129)" stroke-width="8" fill="transparent" stroke-dasharray="301.6" stroke-dashoffset="80" id="lat-gauge" class="transition-all duration-1000"></circle>
-                            </svg>
-                            <div class="absolute text-center">
-                                <span id="lat-val" class="text-xl font-extrabold text-white">52</span>
-                                <span class="text-[10px] text-slate-500 block font-mono">LAT ms</span>
-                            </div>
-                        </div>
-                        <h4 class="text-sm font-bold text-slate-300">Gateway Roundtrip</h4>
-                        <p class="text-xs text-slate-500 mt-1 font-mono">STATUS: ULTRA-LOW</p>
-                    </div>
+                    <label class="block text-xs font-mono text-slate-300 font-semibold tracking-wider uppercase mb-1.5">Telegram Bot Token</label>
+                    <input type="password" id="bot-token-input" placeholder="123456789:ABCdef_GhIjkLmNoPqRs" class="w-full bg-cyber-bg border border-slate-800 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-cyber-accent focus:ring-1 focus:ring-cyber-accent font-mono">
+                    <p class="text-[10px] text-slate-500 mt-1.5 font-sans leading-relaxed">
+                        Generated by <a href="https://t.me/BotFather" target="_blank" class="text-cyber-accent hover:underline font-mono">@BotFather</a> on Telegram. This secret will be handled securely and injected into your repo secrets.
+                    </p>
                 </div>
 
-                <!-- API Routes Table -->
-                <div class="glass-panel rounded-2xl border border-slate-800 overflow-hidden">
-                    <div class="px-6 py-4 bg-slate-950/40 border-b border-slate-800 flex justify-between items-center">
-                        <h4 class="text-sm font-bold text-white">API Integration Specifications</h4>
-                        <span class="text-[10px] font-mono text-cyan-400">GATEWAY LAYER ACTIVE</span>
-                    </div>
-                    
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-xs">
-                            <thead>
-                                <tr class="border-b border-slate-800 text-slate-400 font-mono text-[10px] uppercase tracking-wider">
-                                    <th class="px-6 py-3.5">Method</th>
-                                    <th class="px-6 py-3.5">Endpoint</th>
-                                    <th class="px-6 py-3.5">Description</th>
-                                    <th class="px-6 py-3.5">Latency</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-800 font-mono">
-                                <tr class="hover:bg-slate-900/20">
-                                    <td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold">GET</span></td>
-                                    <td class="px-6 py-4 text-slate-200">/api/health</td>
-                                    <td class="px-6 py-4 text-slate-400">Verifies pipeline system diagnostics</td>
-                                    <td class="px-6 py-4 text-slate-400">1.2ms</td>
-                                </tr>
-                                <tr class="hover:bg-slate-900/20">
-                                    <td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold">GET</span></td>
-                                    <td class="px-6 py-4 text-slate-200">/api/login</td>
-                                    <td class="px-6 py-4 text-slate-400">Initiates GitHub OAuth flow integration</td>
-                                    <td class="px-6 py-4 text-slate-400">0.8ms</td>
-                                </tr>
-                                <tr class="hover:bg-slate-900/20">
-                                    <td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold">GET</span></td>
-                                    <td class="px-6 py-4 text-slate-200">/api/repos</td>
-                                    <td class="px-6 py-4 text-slate-400">Retrieves updated workspace repository index</td>
-                                    <td class="px-6 py-4 text-slate-400">210ms</td>
-                                </tr>
-                                <tr class="hover:bg-slate-900/20">
-                                    <td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-bold">POST</span></td>
-                                    <td class="px-6 py-4 text-slate-200">/api/launch</td>
-                                    <td class="px-6 py-4 text-slate-400">Injects run_bot.yml workflow and commits code</td>
-                                    <td class="px-6 py-4 text-slate-400">450ms</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                <!-- Script selection -->
+                <div>
+                    <label class="block text-xs font-mono text-slate-300 font-semibold tracking-wider uppercase mb-1.5">Select Bot Runner Script</label>
+                    <select id="bot-script-select" class="w-full bg-cyber-bg border border-slate-800 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-cyber-accent focus:ring-1 focus:ring-cyber-accent font-mono">
+                        <option value="movie_bot.py">movie_bot.py — Cinematic Library & Information Bot</option>
+                        <option value="management_bot.py">management_bot.py — Support Ticket Registry & Ops Bot</option>
+                        <option value="custom_mod_bot.py">custom_mod_bot.py — Moderation & Secure Feedback Bot</option>
+                    </select>
                 </div>
-            </section>
 
-            <!-- SECTION: Active Nodes -->
-            <section id="nodes-section" class="space-y-8 hidden">
-                <!-- Active Nodes List -->
-                <div id="nodes-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Dyn list populated by JS -->
+                <div class="pt-4 border-t border-slate-800/60">
+                    <button onclick="handleDeployAndGoLive()" class="w-full py-4 bg-gradient-to-r from-cyber-accent to-cyber-purple hover:scale-[1.01] active:scale-[0.99] text-white font-extrabold rounded-xl text-sm transition-all tracking-wider glow-button cursor-pointer flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4 text-white animate-pulse" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/></svg>
+                        DEPLOY & GO LIVE
+                    </button>
                 </div>
-                
-                <!-- Empty State -->
-                <div id="nodes-empty-state" class="glass-panel rounded-2xl p-12 text-center max-w-lg mx-auto border border-slate-800 space-y-4">
-                    <div class="w-12 h-12 rounded-xl bg-slate-900 flex items-center justify-center mx-auto text-slate-500 border border-slate-800">
-                        <i data-lucide="server-off" class="w-6 h-6"></i>
-                    </div>
-                    <div class="space-y-1">
-                        <h4 class="text-sm font-bold text-white">No Active Daemons Found</h4>
-                        <p class="text-xs text-slate-400">Deploy and register your first bot script using the launch wizard in the primary dashboard page.</p>
-                    </div>
-                </div>
-            </section>
-
+            </div>
         </div>
+
+        <!-- 4. LOGS AND PIPELINE TERMINAL STATE — STEP 3 -->
+        <div id="state-step3-terminal" class="hidden">
+            <div class="mb-6">
+                <span class="text-[10px] font-mono tracking-widest text-[#22C55E] uppercase font-bold bg-[#22C55E]/10 px-2.5 py-1 rounded border border-[#22C55E]/15 animate-pulse">DEPLOYING PIPELINE</span>
+                <h2 id="pipeline-repo-title" class="text-xl sm:text-2xl font-extrabold tracking-tight text-white mt-4 font-mono">owner / repo-name</h2>
+                <p id="pipeline-subtitle" class="text-xs text-slate-400 mt-1">Deploying multi-bot daemon to GitHub runner...</p>
+            </div>
+
+            <!-- Terminal log box -->
+            <div class="bg-black/90 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl font-mono text-xs">
+                <div class="bg-cyber-card px-4 py-3 border-b border-slate-800/80 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-rose-500/80"></span>
+                        <span class="w-3 h-3 rounded-full bg-amber-500/80"></span>
+                        <span class="w-3 h-3 rounded-full bg-emerald-500/80"></span>
+                        <span class="text-[11px] text-slate-400 font-mono ml-1">deployment-logs.sh</span>
+                    </div>
+                    <div class="text-[10px] text-cyber-accent animate-pulse font-semibold uppercase">Live Loop</div>
+                </div>
+                <div id="terminal-logs-body" class="p-5 h-64 overflow-y-auto scroll-custom space-y-2 text-slate-300 leading-relaxed">
+                    <!-- Logs stream in dynamically -->
+                </div>
+            </div>
+
+            <!-- Real Post-Deployment Success Card -->
+            <div id="success-card" class="hidden mt-8 bg-gradient-to-b from-[#10B981]/10 to-[#10B981]/2 border border-[#10B981]/20 rounded-2xl p-6 sm:p-8 text-center space-y-5">
+                <div class="w-14 h-14 rounded-full bg-[#10B981]/15 border border-[#10B981]/30 mx-auto flex items-center justify-center text-[#10B981]">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                </div>
+
+                <div>
+                    <h3 class="text-lg sm:text-xl font-bold text-white font-mono">Deployment Completed</h3>
+                    <p class="text-xs text-slate-400 mt-1">Your Telegram Bot daemon has launched with continuous workflow cycling.</p>
+                </div>
+
+                <div class="max-w-md mx-auto p-4 bg-black/40 rounded-xl border border-slate-800/50 space-y-2 text-left font-mono text-xs">
+                    <div class="flex justify-between"><span class="text-slate-500">REPOSITORY:</span><span class="text-white" id="success-repo-name">owner/repo</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">RUNNER STATUS:</span><span class="text-[#10B981] font-semibold flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-ping"></span>24X7 LOOP ACTIVE</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">SCRIPT ENGINE:</span><span class="text-cyber-accent" id="success-script-name">movie_bot.py</span></div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3 max-w-md mx-auto pt-2">
+                    <a id="bot-telegram-link" href="#" target="_blank" class="flex-1 py-3 bg-[#10B981] hover:bg-[#10B981]/90 text-slate-950 font-bold text-xs rounded-xl transition-all uppercase tracking-wider flex items-center justify-center gap-1.5">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.56 8.16l-1.92 9.12c-.14.65-.53.81-1.08.5l-2.93-2.16-1.41 1.36c-.16.16-.29.29-.6.29l.21-2.98 5.43-4.9c.24-.21-.05-.33-.37-.11L10.13 13.1l-2.89-.9c-.63-.2-.64-.63.13-.93l11.27-4.34c.52-.19.98.12.82.72z"/></svg>
+                        Open Telegram Bot
+                    </a>
+                    <button onclick="stopActiveBot()" class="py-3 px-5 border border-rose-500/30 hover:border-rose-500/50 bg-rose-500/5 hover:bg-rose-500/10 text-rose-400 font-bold text-xs rounded-xl transition-all uppercase tracking-wider cursor-pointer">
+                        Stop Runner
+                    </button>
+                </div>
+
+                <div class="pt-4 border-t border-slate-800/40">
+                    <button onclick="goToStep1()" class="text-xs text-slate-400 hover:text-white transition-all font-mono font-bold uppercase cursor-pointer flex items-center gap-1 mx-auto">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                        Deploy Another Bot
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </main>
 
-    <!-- App Logic -->
+    <!-- Footer Area -->
+    <footer class="border-t border-slate-900/80 bg-cyber-bg/40 py-5 text-center font-mono text-[10px] text-slate-600 relative z-10">
+        DAEMON ORCHESTRATION ENGINE • BUILT IDENTICAL TO VERCEL • SECURED DIRECTLY VIA REPOSITORY DISPATCH
+    </footer>
+
+    <!-- Client-Side Dashboard Javascript Controller -->
     <script>
-        // Init Lucide icons
-        lucide.createIcons();
+        let githubToken = "";
+        let repositoriesList = [];
+        let selectedRepository = null;
+        let deploymentLogIndex = 0;
 
-        // App session variables
-        let githubToken = localStorage.getItem('github_token');
-        let githubUsername = localStorage.getItem('github_username') || '';
+        // On DOM Content Loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            initSession();
+        });
 
-        // Catch OAuth Callback redirect query params
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlToken = urlParams.get('token');
-        if (urlToken) {
-            localStorage.setItem('github_token', urlToken);
-            window.history.replaceState({}, document.title, window.location.pathname);
-            githubToken = urlToken;
-        }
-
-        // Initialize state
-        checkAuth();
-
-        function checkAuth() {
-            if (githubToken) {
-                document.getElementById('auth-screen').classList.add('hidden');
-                document.getElementById('dashboard-section').classList.remove('hidden');
-                document.getElementById('logout-btn').classList.remove('hidden');
-                
-                // Show badge count
-                updateActiveNodesCount();
-                
-                // Fetch dynamic elements
-                fetchUserInfo();
-                refreshRepos();
+        // Initialize session and authentication status
+        function initSession() {
+            const urlParams = new URLSearchParams(window.location.search);
+            let token = urlParams.get('token');
+            if (token) {
+                localStorage.setItem('github_token', token);
+                // Clean the token parameter from URL to maintain premium aesthetic
+                window.history.replaceState({}, document.title, window.location.pathname);
             } else {
-                document.getElementById('auth-screen').classList.remove('hidden');
-                document.getElementById('dashboard-section').classList.add('hidden');
-                document.getElementById('logout-btn').classList.add('hidden');
-                
-                // Reset session footer
-                document.getElementById('user-display-name').innerText = 'Guest Session';
-                document.getElementById('user-github-handle').innerText = 'Not Connected';
-                document.getElementById('user-avatar').innerHTML = '<i data-lucide="user" class="w-4 h-4 text-slate-400"></i>';
-                lucide.createIcons();
+                token = localStorage.getItem('github_token');
+            }
+
+            // Fallback: check cookie as well
+            if (!token) {
+                const cookieMatch = document.cookie.match(new RegExp('(^| )github_token=([^;]+)'));
+                if (cookieMatch) {
+                    token = cookieMatch[2];
+                    localStorage.setItem('github_token', token);
+                }
+            }
+
+            if (token && token.trim() !== "") {
+                githubToken = token;
+                showDashboard();
+            } else {
+                showLogin();
             }
         }
 
-        // Login with GitHub (OAuth Redirect)
-        async function loginWithGitHub() {
+        // Show Landing / Login screen
+        function showLogin() {
+            document.getElementById('state-unauthenticated').classList.remove('hidden');
+            document.getElementById('state-step1-repos').classList.add('hidden');
+            document.getElementById('state-step2-config').classList.add('hidden');
+            document.getElementById('state-step3-terminal').classList.add('hidden');
+            
+            // Clear header display
+            document.getElementById('user-header-section').innerHTML = '';
+        }
+
+        // Connect with GitHub Trigger
+        function handleConnectGitHub() {
+            window.location.href = "/api/login";
+        }
+
+        // Show main Dashboard and retrieve list of real repositories
+        function showDashboard() {
+            document.getElementById('state-unauthenticated').classList.add('hidden');
+            document.getElementById('state-step1-repos').classList.remove('hidden');
+            document.getElementById('state-step2-config').classList.add('hidden');
+            document.getElementById('state-step3-terminal').classList.add('hidden');
+
+            // Render Header user stats and disconnect action
+            document.getElementById('user-header-section').innerHTML = `
+                <div class="flex items-center gap-3">
+                    <div class="px-3 py-1 bg-[#10B981]/8 border border-[#10B981]/15 rounded-full text-[10px] font-mono tracking-wider text-[#10B981] flex items-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.06)]">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse"></span>
+                        AUTHENTICATED
+                    </div>
+                    <button onclick="handleLogout()" class="px-3.5 py-1.5 rounded-lg border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 font-mono text-[11px] transition-all cursor-pointer">
+                        Sign Out
+                    </button>
+                </div>
+            `;
+
+            fetchRepositories();
+        }
+
+        // Log out clean
+        function handleLogout() {
+            localStorage.removeItem('github_token');
+            // Clear cookie
+            document.cookie = "github_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            githubToken = "";
+            showLogin();
+        }
+
+        // Fetch repositories via FastAPI endpoint asynchronously
+        async function fetchRepositories() {
+            const container = document.getElementById('repos-container');
+            container.innerHTML = `
+                <div class="p-12 text-center text-slate-500 font-mono text-sm flex flex-col items-center justify-center gap-3">
+                    <div class="w-6 h-6 border-2 border-t-transparent border-cyber-accent rounded-full animate-spin"></div>
+                    Loading active GitHub repositories...
+                </div>
+            `;
+
             try {
-                const response = await fetch('/api/login');
+                const response = await fetch(`/api/repos?token=${encodeURIComponent(githubToken)}`);
                 if (!response.ok) {
-                    throw new Error('Failed to fetch authorization URL');
+                    throw new Error("Failed to retrieve repositories");
                 }
                 const data = await response.json();
-                if (data.url) {
-                    window.location.href = data.url;
-                } else {
-                    throw new Error('No authorization URL returned');
-                }
-            } catch (err) {
-                console.error(err);
-                alert("Configuration Error: Unable to initiate GitHub authorization. Please verify GITHUB_CLIENT_ID configuration on your server.");
-            }
-        }
-
-        // Manual connect
-        function loginManually() {
-            const username = document.getElementById('manual-username').value.trim();
-            const pat = document.getElementById('manual-pat').value.trim();
-            
-            if (!username || !pat) {
-                alert('Both Username and Personal Access Token are required.');
-                return;
-            }
-            
-            localStorage.setItem('github_token', pat);
-            localStorage.setItem('github_username', username);
-            githubToken = pat;
-            githubUsername = username;
-            
-            logTerminal("success", `[SYSTEM] Manually connected with GitHub account: @${username}`);
-            checkAuth();
-        }
-
-        // Logout
-        function logout() {
-            localStorage.removeItem('github_token');
-            localStorage.removeItem('github_username');
-            githubToken = null;
-            githubUsername = '';
-            checkAuth();
-        }
-
-        // Fetch User Info
-        async function fetchUserInfo() {
-            if (!githubToken) return;
-            try {
-                const resp = await fetch('https://api.github.com/user', {
-                    headers: {
-                        'Authorization': `token ${githubToken}`
-                    }
-                });
-                if (resp.ok) {
-                    const user = await resp.json();
-                    localStorage.setItem('github_username', user.login);
-                    document.getElementById('user-display-name').innerText = user.name || user.login;
-                    document.getElementById('user-github-handle').innerText = `@${user.login}`;
-                    document.getElementById('user-avatar').innerHTML = `<img src="${user.avatar_url}" alt="Avatar" class="w-full h-full object-cover">`;
-                } else if (githubUsername) {
-                    // Fallback to manual username
-                    document.getElementById('user-display-name').innerText = githubUsername;
-                    document.getElementById('user-github-handle').innerText = `@${githubUsername}`;
-                }
-            } catch (e) {
-                console.error("Failed to fetch GitHub user details:", e);
-                if (githubUsername) {
-                    document.getElementById('user-display-name').innerText = githubUsername;
-                    document.getElementById('user-github-handle').innerText = `@${githubUsername}`;
-                }
-            }
-        }
-
-        // Fetch Repositories
-        async function refreshRepos() {
-            if (!githubToken) return;
-            const select = document.getElementById('repo-select');
-            const icon = document.getElementById('repo-refresh-icon');
-            
-            icon.classList.add('animate-spin');
-            select.innerHTML = '<option value="">Syncing repositories...</option>';
-            
-            try {
-                const resp = await fetch(`/api/repos?token=${githubToken}`);
-                if (!resp.ok) throw new Error(await resp.text());
-                const repos = await resp.json();
-                
-                select.innerHTML = '';
-                if (repos.length === 0) {
-                    select.innerHTML = '<option value="">No repositories found</option>';
-                    return;
-                }
-                
-                repos.forEach(repo => {
-                    const option = document.createElement('option');
-                    option.value = repo.full_name;
-                    option.innerText = repo.full_name;
-                    select.appendChild(option);
-                });
-                
-                logTerminal("success", `[SYSTEM] Sync complete. Loaded ${repos.length} active repositories.`);
-            } catch (err) {
-                console.error(err);
-                select.innerHTML = '<option value="">Failed to sync repositories</option>';
-                logTerminal("error", `[SYSTEM] Sync error: ${err.message}`);
-            } finally {
-                icon.classList.remove('animate-spin');
-            }
-        }
-
-        // Deployment Console Log Logger
-        function logTerminal(type, message) {
-            const term = document.getElementById('terminal-body');
-            const cursor = document.getElementById('terminal-cursor');
-            const line = document.createElement('div');
-            
-            if (type === 'success') line.className = 'text-emerald-400';
-            else if (type === 'error') line.className = 'text-rose-500';
-            else if (type === 'info') line.className = 'text-cyan-400';
-            else line.className = 'text-slate-300';
-            
-            const timestamp = new Date().toLocaleTimeString();
-            line.innerText = `[${timestamp}] ${message}`;
-            
-            term.insertBefore(line, cursor);
-            term.scrollTop = term.scrollHeight;
-        }
-
-        function clearTerminal() {
-            const term = document.getElementById('terminal-body');
-            term.innerHTML = '<span class="block-cursor" id="terminal-cursor"></span>';
-        }
-
-        // Deploy logic
-        async function handleDeploy(event) {
-            event.preventDefault();
-            const repo_name = document.getElementById('repo-select').value;
-            const bot_token = document.getElementById('bot-token').value.trim();
-            const script_name = document.getElementById('script-template').value;
-            
-            if (!repo_name || !bot_token || !script_name) {
-                alert('Please select and complete all required forms.');
-                return;
-            }
-            
-            const btn = document.getElementById('deploy-submit-btn');
-            const originalHTML = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<div class="w-4 h-4 border-2 border-slate-300 border-t-cyan-400 rounded-full animate-spin"></div> Provisioning node...';
-            
-            logTerminal("info", `[DEPLOY] Initiating deployment pipeline for workspace: ${repo_name}`);
-            logTerminal("info", `[DEPLOY] Selected daemon runtime script: ${script_name}.py`);
-            logTerminal("info", `[DEPLOY] Dispatching validation call to Telegram gateways...`);
-            
-            try {
-                const resp = await fetch('/api/launch', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        repo_name: repo_name,
-                        bot_token: bot_token,
-                        script_name: script_name,
-                        github_token: githubToken
-                    })
-                });
-                
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.detail || 'Build process failed');
-                
-                logTerminal("success", `[DEPLOY] SUCCESS: ${data.message}`);
-                logTerminal("success", `[DEPLOY] Node @${data.username} successfully registered as active node.`);
-                
-                // Track active deployments in local storage
-                let activeBots = JSON.parse(localStorage.getItem('active_bots') || '[]');
-                const existingIdx = activeBots.findIndex(b => b.repo_name === repo_name);
-                const botData = {
-                    repo_name: repo_name,
-                    bot_username: data.username,
-                    bot_token: bot_token,
-                    script_name: script_name,
-                    status: 'ACTIVE',
-                    deployed_at: new Date().toLocaleDateString()
-                };
-                
-                if (existingIdx > -1) {
-                    activeBots[existingIdx] = botData;
-                } else {
-                    activeBots.push(botData);
-                }
-                localStorage.setItem('active_bots', JSON.stringify(activeBots));
-                
-                updateActiveNodesCount();
-                renderActiveBots();
-                document.getElementById('bot-token').value = '';
-            } catch (err) {
-                logTerminal("error", `[DEPLOY] ERROR: ${err.message}`);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalHTML;
-            }
-        }
-
-        // Cancel Active daemon workflow run
-        async function stopDaemon(repoName) {
-            logTerminal("info", `[DAEMON] Terminating continuous workflow instances for: ${repoName}`);
-            try {
-                const resp = await fetch('/api/stop', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        repo_name: repoName,
-                        github_token: githubToken
-                    })
-                });
-                
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.detail || 'Failed to stop');
-                
-                logTerminal("success", `[DAEMON] Stopped successfully. ${data.cancelled_instances} workflow run pipelines terminated.`);
-                
-                // Remove from local tracking list
-                let activeBots = JSON.parse(localStorage.getItem('active_bots') || '[]');
-                activeBots = activeBots.filter(b => b.repo_name !== repoName);
-                localStorage.setItem('active_bots', JSON.stringify(activeBots));
-                
-                updateActiveNodesCount();
-                renderActiveBots();
-            } catch (err) {
-                logTerminal("error", `[DAEMON] Cancel error: ${err.message}`);
-            }
-        }
-
-        // Render Active Nodes Tab
-        function renderActiveBots() {
-            const grid = document.getElementById('nodes-grid');
-            const emptyState = document.getElementById('nodes-empty-state');
-            const activeBots = JSON.parse(localStorage.getItem('active_bots') || '[]');
-            
-            grid.innerHTML = '';
-            if (activeBots.length === 0) {
-                emptyState.classList.remove('hidden');
-                return;
-            }
-            emptyState.classList.add('hidden');
-            
-            activeBots.forEach(bot => {
-                const card = document.createElement('div');
-                card.className = 'glass-panel rounded-2xl p-6 border border-slate-800 flex flex-col justify-between relative overflow-hidden card-3d';
-                
-                // Icon select based on template type
-                let templateIcon = 'help-circle';
-                let templateColor = 'text-violet-400 bg-violet-500/10 border-violet-500/20';
-                if (bot.script_name.includes('movie')) {
-                    templateIcon = 'film';
-                    templateColor = 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
-                } else if (bot.script_name.includes('feedback')) {
-                    templateIcon = 'message-square';
-                    templateColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-                }
-                
-                card.innerHTML = `
-                    <div class="space-y-4">
-                        <div class="flex items-start justify-between">
-                            <div class="min-w-0 flex-1">
-                                <h4 class="font-bold text-white text-sm truncate">${bot.repo_name}</h4>
-                                <p class="text-xs text-slate-400 font-mono mt-1">@${bot.bot_username}</p>
-                            </div>
-                            <span class="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">Active</span>
+                repositoriesList = data || [];
+                renderRepositories(repositoriesList);
+            } catch (error) {
+                container.innerHTML = `
+                    <div class="p-8 text-center space-y-4">
+                        <div class="w-10 h-10 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 mx-auto flex items-center justify-center">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                         </div>
-                        
-                        <div class="flex items-center gap-2 p-2 rounded bg-slate-900/50 border border-slate-850">
-                            <div class="w-7 h-7 rounded flex items-center justify-center border ${templateColor}">
-                                <i data-lucide="${templateIcon}" class="w-3.5 h-3.5"></i>
-                            </div>
-                            <div class="text-[10px] font-mono">
-                                <p class="text-slate-500 uppercase tracking-wider text-[8px]">Script Template</p>
-                                <p class="text-slate-300 font-semibold">${bot.script_name}.py</p>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-500">
-                            <div>
-                                <span class="block text-[8px] uppercase tracking-wider">Deployed</span>
-                                <span class="text-slate-300 font-medium">${bot.deployed_at || 'Recently'}</span>
-                            </div>
-                            <div>
-                                <span class="block text-[8px] uppercase tracking-wider">Trigger</span>
-                                <span class="text-slate-300 font-medium">Auto-Recycle</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="pt-6">
-                        <button onclick="stopDaemon('${bot.repo_name}')" class="w-full py-2 px-3 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/15 hover:border-rose-500/30 text-xs font-semibold transition-all flex items-center justify-center gap-2">
-                            <i data-lucide="stop-circle" class="w-3.5 h-3.5"></i>
-                            Deregister & Stop Daemon
-                        </button>
+                        <p class="text-xs font-mono text-slate-400 leading-relaxed">Error syncing repositories from GitHub.<br>Your access token may have expired or lacks 'repo' scopes.</p>
+                        <button onclick="handleLogout()" class="px-5 py-2 rounded-lg bg-cyber-accent text-slate-950 font-bold text-xs hover:bg-cyber-accent/80 transition-all font-sans cursor-pointer">Reconnect Account</button>
                     </div>
                 `;
-                grid.appendChild(card);
-            });
-            lucide.createIcons();
-        }
-
-        // Active nodes count badge updating
-        function updateActiveNodesCount() {
-            const activeBots = JSON.parse(localStorage.getItem('active_bots') || '[]');
-            const badge = document.getElementById('active-nodes-badge');
-            if (activeBots.length > 0) {
-                badge.innerText = activeBots.length;
-                badge.classList.remove('hidden');
-            } else {
-                badge.classList.add('hidden');
             }
         }
 
-        // Switch navigation tabs
-        function switchTab(tabId) {
-            // Section elements
-            const sections = {
-                dashboard: document.getElementById('dashboard-section'),
-                status: document.getElementById('status-section'),
-                nodes: document.getElementById('nodes-section')
-            };
-            
-            // Tab elements
-            const navButtons = {
-                dashboard: document.getElementById('nav-dashboard'),
-                status: document.getElementById('nav-status'),
-                nodes: document.getElementById('nav-nodes')
-            };
-            
-            // Loop and switch active styling
-            Object.keys(sections).forEach(key => {
-                if (key === tabId) {
-                    if (githubToken || tabId === 'dashboard') {
-                        sections[key].classList.remove('hidden');
-                    }
-                    navButtons[key].className = "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-cyan-400 bg-cyan-500/10 border-l-3 border-cyan-500";
+        // Render repositories list to container
+        function renderRepositories(repos) {
+            const container = document.getElementById('repos-container');
+            if (repos.length === 0) {
+                container.innerHTML = `
+                    <div class="p-12 text-center text-slate-500 font-mono text-sm leading-relaxed">
+                        No repositories found.<br>Create a repository in GitHub first to launch a bot.
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = repos.map(repo => `
+                <div class="repo-item-row p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-slate-900/30 transition-all" data-name="${repo.full_name.toLowerCase()}">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-9 h-9 rounded-xl bg-cyber-accent/5 border border-cyber-accent/15 flex items-center justify-center text-cyber-accent shrink-0">
+                            <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="text-sm font-bold text-white font-mono truncate leading-normal">${repo.full_name}</h4>
+                            <div class="flex items-center gap-3.5 mt-0.5">
+                                <span class="flex items-center gap-1 text-[10px] text-slate-500 font-mono">
+                                    <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7a3 3 0 100-6 3 3 0 000 6zM8 7V17M8 17a3 3 0 100 6 3 3 0 000-6zM8 12h8a3 3 0 100 6 3 3 0 000-6z"/></svg>
+                                    ${repo.default_branch || 'main'}
+                                </span>
+                                <span class="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border border-slate-800 bg-black/30 ${repo.private ? 'text-amber-400 border-amber-500/10' : 'text-slate-400'}">
+                                    ${repo.private ? 'Private' : 'Public'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="selectRepository(${JSON.stringify(repo).replace(/"/g, '&quot;')})" class="px-5 py-2 bg-cyber-accent/10 border border-cyber-accent/25 text-cyber-accent hover:bg-cyber-accent hover:text-slate-950 font-extrabold font-mono text-xs rounded-xl transition-all tracking-wider cursor-pointer shadow-sm">
+                        IMPORT
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Filter Repositories in list in real-time
+        function filterRepositories() {
+            const query = document.getElementById('repo-search-input').value.toLowerCase();
+            const rows = document.querySelectorAll('.repo-item-row');
+            rows.forEach(row => {
+                const name = row.getAttribute('data-name');
+                if (name && name.includes(query)) {
+                    row.classList.remove('hidden');
+                    row.classList.add('flex');
                 } else {
-                    sections[key].classList.add('hidden');
-                    navButtons[key].className = "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-slate-400 hover:text-white hover:bg-slate-800/50";
+                    row.classList.remove('flex');
+                    row.classList.add('hidden');
                 }
             });
+        }
 
-            // Update Header Title
-            const titleMap = {
-                dashboard: 'Dashboard Console',
-                status: 'System Diagnostics',
-                nodes: 'Active Workloads'
-            };
-            document.getElementById('page-title').innerText = titleMap[tabId];
+        // Transition to STEP 2 with selected repository
+        function selectRepository(repo) {
+            selectedRepository = repo;
+            document.getElementById('state-step1-repos').classList.add('hidden');
+            document.getElementById('state-step2-config').classList.remove('hidden');
 
-            if (tabId === 'nodes') {
-                renderActiveBots();
+            document.getElementById('selected-repo-title').textContent = repo.full_name;
+            document.getElementById('bot-token-input').value = "";
+        }
+
+        // Go back to STEP 1
+        function goToStep1() {
+            document.getElementById('state-step2-config').classList.add('hidden');
+            document.getElementById('state-step3-terminal').classList.add('hidden');
+            document.getElementById('state-step1-repos').classList.remove('hidden');
+            selectedRepository = null;
+        }
+
+        // Trigger active deployment pipeline
+        async function handleDeployAndGoLive() {
+            const botToken = document.getElementById('bot-token-input').value.trim();
+            const scriptName = document.getElementById('bot-script-select').value;
+
+            if (!botToken) {
+                alert("Please enter a valid Telegram Bot Token first!");
+                return;
+            }
+
+            // Move to Step 3 layout immediately
+            document.getElementById('state-step2-config').classList.add('hidden');
+            document.getElementById('state-step3-terminal').classList.remove('hidden');
+            document.getElementById('success-card').classList.add('hidden');
+
+            document.getElementById('pipeline-repo-title').textContent = selectedRepository.full_name;
+            document.getElementById('pipeline-subtitle').textContent = `Spawning continuous bot engine pipeline for: ${scriptName}`;
+
+            const terminalLogs = document.getElementById('terminal-logs-body');
+            terminalLogs.innerHTML = "";
+
+            function log(text, isError = false, isSuccess = false) {
+                const timestamp = new Date().toLocaleTimeString();
+                const div = document.createElement('div');
+                div.className = isError ? 'text-rose-400 font-semibold' : (isSuccess ? 'text-emerald-400 font-bold' : 'text-slate-300');
+                div.innerHTML = `<span class="text-slate-500 font-mono text-[10px] mr-2">[${timestamp}]</span> ${text}`;
+                terminalLogs.appendChild(div);
+                terminalLogs.scrollTop = terminalLogs.scrollHeight;
+            }
+
+            log(`Initializing automated multi-bot deployment sequence...`);
+            await sleep(800);
+            log(`Contacting Telegram API to verify Bot Token authenticity...`);
+            await sleep(600);
+
+            try {
+                const response = await fetch('/api/launch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        repo_name: selectedRepository.full_name,
+                        bot_token: botToken,
+                        script_name: scriptName,
+                        github_token: githubToken
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || "Automated deployment failed");
+                }
+
+                log(`Success! Verified bot identity: <span class="text-cyber-accent font-bold">@${data.username}</span>`);
+                await sleep(700);
+                log(`Synchronizing with GitHub Content APIs...`);
+                await sleep(500);
+                log(`Creating workflow folder and runner definition: <span class="text-slate-100 font-mono text-[11px] bg-slate-900 px-1 py-0.5 rounded">.github/workflows/run_bot.yml</span>`);
+                await sleep(600);
+                log(`Committing optimized script template: <span class="text-slate-100 font-mono text-[11px] bg-slate-900 px-1 py-0.5 rounded">templates/${data.bot_type}.py</span>`);
+                await sleep(650);
+                log(`Invoking Repository Dispatches API to launch 24x7 runner pipeline...`);
+                await sleep(800);
+                log(`Continuous loop orchestrator activated! Deployment completed successfully!`, false, true);
+
+                // Prepare success card
+                document.getElementById('success-repo-name').textContent = selectedRepository.full_name;
+                document.getElementById('success-script-name').textContent = `${data.bot_type}.py`;
+                document.getElementById('bot-telegram-link').href = `https://t.me/${data.username}`;
+                
+                // Show success card
+                await sleep(300);
+                document.getElementById('success-card').classList.remove('hidden');
+
+            } catch (error) {
+                log(`CRITICAL ERROR: ${error.message}`, true);
+                log(`Deployment workflow terminated due to pipeline failure. Please verify your token and repository permissions.`, true);
+                
+                // Display retry action button after log failure
+                const retryBtn = document.createElement('button');
+                retryBtn.className = "mt-4 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-white font-mono font-bold uppercase rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5";
+                retryBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15H15M15 15h6v-6"/></svg> Back to Config`;
+                retryBtn.onclick = () => {
+                    document.getElementById('state-step3-terminal').classList.add('hidden');
+                    document.getElementById('state-step2-config').classList.remove('hidden');
+                };
+                terminalLogs.appendChild(retryBtn);
+                terminalLogs.scrollTop = terminalLogs.scrollHeight;
             }
         }
 
-        // Dynamic status gauges simulator
-        setInterval(() => {
-            if (document.getElementById('status-section').classList.contains('hidden')) return;
-            
-            // Fluctuations
-            const cpuVal = Math.floor(Math.random() * 14) + 12; // 12-25
-            const ramVal = Math.floor(Math.random() * 5) + 44;   // 44-48
-            const latVal = Math.floor(Math.random() * 21) + 45;  // 45-65
-            
-            // Update Text
-            document.getElementById('cpu-val').innerText = cpuVal;
-            document.getElementById('ram-val').innerText = ramVal;
-            document.getElementById('lat-val').innerText = latVal;
-            
-            // SVG Circumference is 2 * PI * r = 2 * 3.14159 * 48 = ~301.6
-            const maxCircumference = 301.6;
-            
-            // Compute offsets
-            const cpuOffset = maxCircumference - (cpuVal / 100) * maxCircumference;
-            const ramOffset = maxCircumference - (ramVal / 100) * maxCircumference;
-            const latOffset = maxCircumference - (latVal / 100) * maxCircumference;
-            
-            // Update dash offsets
-            document.getElementById('cpu-gauge').style.strokeDashoffset = cpuOffset;
-            document.getElementById('ram-gauge').style.strokeDashoffset = ramOffset;
-            document.getElementById('lat-gauge').style.strokeDashoffset = latOffset;
-        }, 1500);
+        // Cancel / stop bot pipeline execution
+        async function stopActiveBot() {
+            if (!confirm("Are you sure you want to stop all active background workflow runs for this bot in this repository?")) {
+                return;
+            }
+
+            const successCard = document.getElementById('success-card');
+            const originalHTML = successCard.innerHTML;
+            successCard.innerHTML = `
+                <div class="p-6 text-center text-slate-400 font-mono text-sm flex flex-col items-center justify-center gap-3">
+                    <div class="w-6 h-6 border-2 border-t-transparent border-rose-500 rounded-full animate-spin"></div>
+                    Cancelling active GitHub workflow runs...
+                </div>
+            `;
+
+            try {
+                const response = await fetch('/api/stop', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        repo_name: selectedRepository.full_name,
+                        github_token: githubToken
+                    })
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.detail || "Failed to cancel pipeline runs");
+                }
+
+                alert("All active workflow runs have been successfully stopped.");
+                goToStep1();
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+                successCard.innerHTML = originalHTML;
+            }
+        }
+
+        // Simple helper delay function
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
     </script>
 </body>
-</html>"""
+</html>
+"""
+
+# Try to determine the dynamic redirect URI based on the request host
+def get_redirect_uri(request: Request) -> str:
+    host = request.headers.get("host")
+    if host:
+        scheme = "https" if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https" else "http"
+        return f"{scheme}://{host}/api/callback"
+    return REDIRECT_URI
 
 GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET")
 REDIRECT_URI = "https://multi-bot-hosting-platform.vercel.app/api/callback"
 
-# Secure fallback warning check
 if not GITHUB_CLIENT_ID:
-    print("[DEBUG] GITHUB_CLIENT_ID environment variable is missing!")
     logger.warning("GITHUB_CLIENT_ID environment variable is missing!")
 if not GITHUB_CLIENT_SECRET:
-    print("[DEBUG] GITHUB_CLIENT_SECRET environment variable is missing!")
     logger.warning("GITHUB_CLIENT_SECRET environment variable is missing!")
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    # Dynamic insertion of Client ID to avoid hardcoded credentials in code assets
-    client_id = GITHUB_CLIENT_ID or ""
-    html_content = DASHBOARD_HTML.replace("__GITHUB_CLIENT_ID__", client_id)
-    return HTMLResponse(content=html_content)
+    return HTMLResponse(content=DASHBOARD_HTML)
 
 @app.get("/api/health")
 @app.get("/health")
 async def health():
     return {
         "status": "healthy",
-        "platform": "GitHub Actions Multi-Bot SaaS platform (FastAPI Integration)",
+        "platform": "GitHub Actions Multi-Bot SaaS platform (FastAPI)",
         "indicator": "Active"
     }
 
@@ -1196,18 +947,17 @@ async def login(request: Request):
     if not GITHUB_CLIENT_ID:
         raise HTTPException(
             status_code=400,
-            detail="GitHub OAuth is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio, or use the Personal Access Token (PAT) option instead."
+            detail="GitHub OAuth is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio."
         )
 
-    auth_url = f"https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=repo%20workflow"
-    return {"url": auth_url}
+    dynamic_redirect = get_redirect_uri(request)
+    auth_url = f"https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&redirect_uri={dynamic_redirect}&scope=repo%20workflow"
+    return JSONResponse(status_code=200, content={"url": auth_url})
 
 @app.get("/api/callback")
 @app.get("/callback")
 async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
     if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
-        print("[DEBUG] GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET is missing during callback handling!")
-
         error_html = """
         <!DOCTYPE html>
         <html lang="en">
@@ -1216,7 +966,7 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
             <title>Configuration Missing</title>
             <style>
                 body {
-                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-family: 'Inter', -apple-system, sans-serif;
                     background-color: #020617;
                     color: #EF4444;
                     display: flex;
@@ -1241,15 +991,15 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
         <body>
             <div class="card">
                 <h1>GitHub OAuth Setup Required</h1>
-                <p>GitHub Client ID or Secret is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio, or use the Personal Access Token (PAT) option instead!</p>
+                <p>GitHub Client ID or Secret is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio.</p>
             </div>
         </body>
         </html>
         """
         return HTMLResponse(content=error_html, status_code=400)
 
+    dynamic_redirect = get_redirect_uri(request)
     async with httpx.AsyncClient() as client:
-        # Exchange code for access token
         resp = await client.post(
             "https://github.com/login/oauth/access_token",
             headers={"Accept": "application/json"},
@@ -1257,17 +1007,15 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
                 "client_id": GITHUB_CLIENT_ID,
                 "client_secret": GITHUB_CLIENT_SECRET,
                 "code": code,
-                "redirect_uri": REDIRECT_URI
+                "redirect_uri": dynamic_redirect
             }
         )
         data = resp.json()
         access_token = data.get("access_token", "")
 
-    # If JSON is preferred, return direct JSON payload
     if "application/json" in request.headers.get("accept", ""):
         return {"access_token": access_token}
 
-    # Return clean token response closer script or redirect
     html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -1296,7 +1044,7 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
             }}
             .loader {{
                 border: 3px solid #1E293B;
-                border-top: 3px solid #06B6D4;
+                border-top: 3px solid #00D4FF;
                 border-radius: 50%;
                 width: 32px;
                 height: 32px;
@@ -1312,23 +1060,22 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
     <body>
         <div class="card">
             <div class="loader"></div>
-            <h2 style="color: #22D3EE; margin-top: 0; font-weight: 800;">Authorized Successfully</h2>
+            <h2 style="color: #00D4FF; margin-top: 0; font-weight: 800;">Authorized Successfully</h2>
             <p style="color: #94A3B8; font-size: 0.95rem;">Syncing repositories with your Dashboard...</p>
             <p style="color: #475569; font-size: 0.8rem;">This window will update and close automatically.</p>
         </div>
 
         <script>
             const token = "{access_token}";
-            if (window.opener) {
-                window.opener.postMessage({ type: "OAUTH_AUTH_SUCCESS", token: token }, "*");
-                setTimeout(() => { window.close(); }, 1000);
-                // Fallback in case window.close is blocked or ignored by the browser
-                setTimeout(() => {
-                    window.location.href = "/?token=" + token + "#dashboard-section";
-                }, 1800);
-            } else {
-                window.location.href = "/?token=" + token + "#dashboard-section";
-            }
+            if (window.opener) {{
+                window.opener.postMessage({{ type: "OAUTH_AUTH_SUCCESS", token: token }}, "*");
+                setTimeout(() => {{ window.close(); }}, 1000);
+                setTimeout(() => {{
+                    window.location.href = "/?token=" + token;
+                }}, 1800);
+            }} else {{
+                window.location.href = "/?token=" + token;
+            }}
         </script>
     </body>
     </html>
@@ -1409,19 +1156,33 @@ async def launch_bot(payload: LaunchRequest):
     if not repo_name or not bot_token or not script_name:
         raise HTTPException(status_code=400, detail="Missing required deployment fields")
 
+    if not github_token:
+        raise HTTPException(status_code=400, detail="Missing required GitHub access token")
+
     # Select Python script template
-    if "movie" in script_name:
+    clean_script_name = script_name.replace(".py", "")
+    if clean_script_name == "movie_bot":
         py_content = MOVIE_BOT_PY
         actual_script = "movie_bot"
-    elif "support" in script_name or "management" in script_name:
+    elif clean_script_name == "management_bot":
         py_content = SUPPORT_BOT_PY
         actual_script = "management_bot"
-    elif "feedback" in script_name or "custom_mod" in script_name:
+    elif clean_script_name == "custom_mod_bot":
         py_content = FEEDBACK_BOT_PY
         actual_script = "custom_mod_bot"
     else:
-        py_content = MOVIE_BOT_PY
-        actual_script = "movie_bot"
+        if "movie" in clean_script_name:
+            py_content = MOVIE_BOT_PY
+            actual_script = "movie_bot"
+        elif "management" in clean_script_name or "support" in clean_script_name:
+            py_content = SUPPORT_BOT_PY
+            actual_script = "management_bot"
+        elif "feedback" in clean_script_name or "custom_mod" in clean_script_name:
+            py_content = FEEDBACK_BOT_PY
+            actual_script = "custom_mod_bot"
+        else:
+            py_content = MOVIE_BOT_PY
+            actual_script = "movie_bot"
 
     headers = {
         "Authorization": f"token {github_token}",
@@ -1430,7 +1191,7 @@ async def launch_bot(payload: LaunchRequest):
     }
 
     async with httpx.AsyncClient() as client:
-        # Verify Bot Token first with Telegram API
+        # Verify Bot Token with Telegram API
         get_me_url = f"https://api.telegram.org/bot{bot_token}/getMe"
         me_resp = await client.get(get_me_url)
         me_data = me_resp.json()
@@ -1482,7 +1243,7 @@ async def launch_bot(payload: LaunchRequest):
             logger.error(f"GitHub repository dispatch failed: {dispatch_resp.text}")
             raise HTTPException(
                 status_code=dispatch_resp.status_code, 
-                detail=f"Successfully injected workflow files, but failed to start runner dispatch: {dispatch_resp.text}"
+                detail=f"Successfully committed bot files, but failed to dispatch the workflow runner: {dispatch_resp.text}"
             )
 
         return {
@@ -1500,7 +1261,10 @@ async def stop_bot(payload: StopRequest):
     github_token = payload.github_token
 
     if not repo_name:
-        raise HTTPException(status_code=400, detail="Missing required repo name")
+        raise HTTPException(status_code=400, detail="Missing required repository name")
+
+    if not github_token:
+        raise HTTPException(status_code=400, detail="Missing required GitHub access token")
 
     headers = {
         "Authorization": f"token {github_token}",
@@ -1513,7 +1277,7 @@ async def stop_bot(payload: StopRequest):
         runs_url = f"https://api.github.com/repos/{repo_name}/actions/runs?status=in_progress"
         runs_resp = await client.get(runs_url, headers=headers)
         if runs_resp.status_code != 200:
-            raise HTTPException(status_code=runs_resp.status_code, detail=f"Failed to fetch actions runs: {runs_resp.text}")
+            raise HTTPException(status_code=runs_resp.status_code, detail=f"Failed to fetch active actions runs: {runs_resp.text}")
 
         runs_data = runs_resp.json()
         runs = runs_data.get("workflow_runs", [])
@@ -1529,91 +1293,12 @@ async def stop_bot(payload: StopRequest):
 
         return {
             "success": True,
-            "message": f"Active workflow runs stopped successfully. Cancelled {cancelled_count} runner instances.",
-            "cancelled_instances": cancelled_count
+            "message": f"Stopped {cancelled_count} active workflow runner instances.",
+            "cancelled_count": cancelled_count
         }
 
 @app.post("/api/webhook")
 @app.post("/webhook")
-async def telegram_webhook(
-    request: Request,
-    token: str = Query(...),
-    type: str = Query(...)
-):
-    try:
-        update = await request.json()
-    except Exception:
-        return {"status": "ignored", "reason": "invalid_json"}
-
-    message = update.get("message")
-    if not message:
-        return {"status": "ignored", "reason": "no_message"}
-
-    chat = message.get("chat")
-    if not chat or not chat.get("id"):
-        return {"status": "ignored", "reason": "no_chat"}
-
-    chat_id = chat.get("id")
-    text = (message.get("text") or "").strip()
-
-    telegram_send_url = f"https://api.telegram.org/bot{token}/sendMessage"
-    response_text = ""
-
-    if text.startswith("/start"):
-        if type == "movie_bot":
-            response_text = (
-                "Welcome to Movie Suggestion Bot!\n\n"
-                "I am running 24x7 on our secure hosting platform via GitHub Actions.\n\n"
-                "Here are the commands you can use:\n"
-                "list - View available blockbusters\n"
-                "movie <name> - Search details about a blockbuster\n"
-                "help - Show this assistance message"
-            )
-        elif type == "support_bot":
-            response_text = (
-                "Welcome to the 24x7 Customer Support Bot!\n\n"
-                "How can we assist you today? Our support staff has configured this auto-responder to instantly route and log queries.\n\n"
-                "ticket - Register a support ticket\n"
-                "faq - View frequently asked questions\n"
-                "status - Check active system statuses"
-            )
-        elif type == "feedback_bot":
-            response_text = (
-                "Welcome to the feedback and Contact Bot!\n\n"
-                "Your thoughts are critical to our improvements! Send us any feedback or messages, and we will safely log it for the owner.\n\n"
-                "feedback <text> - Register a specific feedback\n"
-                "about - Find out about this bot"
-            )
-        else:
-            response_text = "Daemon Online: Node simulation operational."
-    elif text.startswith("/list") and type == "movie_bot":
-        response_text = "Available Movie Database:\n\nMovie: Interstellar\nMovie: Inception\nMovie: The Dark Knight"
-    elif text.startswith("/faq") and type == "support_bot":
-        response_text = "FAQ\n\n1. Is it 24x7? Yes! Workflows recycle automatically.\n2. Is my token secure? Absolutely."
-    else:
-        if type == "movie_bot":
-            response_text = "I am focused purely on movies! Send /list to find highly rated cinematic releases."
-        elif type == "support_bot":
-            response_text = "Support ticket received! Your message has been logged. An agent will contact you shortly."
-        elif type == "feedback_bot":
-            response_text = "Message recorded. If you want to log it as formal feedback, please use /feedback <your message>!"
-        else:
-            response_text = f"Simulated response to: {text}"
-
-    async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.post(
-                telegram_send_url,
-                json={
-                    "chat_id": chat_id,
-                    "text": response_text,
-                    "parse_mode": "Markdown"
-                }
-            )
-            res_data = resp.json()
-            if resp.status_code == 200 and res_data.get("ok"):
-                return {"status": "success", "action": "sent_reply", "type": type}
-            else:
-                return {"status": "partial_error", "telegram_error": res_data}
-        except Exception as e:
-            return {"status": "failed_execution", "error": str(e)}
+async def telegram_webhook(request: Request):
+    # Safe webhook fallback endpoint
+    return {"status": "ignored", "detail": "Platform uses continuous long-polling via Actions runners."}
