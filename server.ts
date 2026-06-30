@@ -334,6 +334,17 @@ async function commitGitHubFile(token: string, repoName: string, filePath: strin
 }
 
 // API Routes
+const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || "";
+const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || "";
+const REDIRECT_URI = "https://multi-bot-hosting-platform.vercel.app/api/callback";
+
+if (!GITHUB_CLIENT_ID) {
+  console.log("[DEBUG] GITHUB_CLIENT_ID environment variable is missing!");
+}
+if (!GITHUB_CLIENT_SECRET) {
+  console.log("[DEBUG] GITHUB_CLIENT_SECRET environment variable is missing!");
+}
+
 app.get("/api/health", (req, res) => {
   res.json({
     status: "healthy",
@@ -343,31 +354,78 @@ app.get("/api/health", (req, res) => {
 });
 
 app.get("/api/login", (req, res) => {
-  const clientId = process.env.GITHUB_CLIENT_ID || "";
-  const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-  const redirectUri = `${appUrl}/callback`;
-
-  if (!clientId) {
+  if (!GITHUB_CLIENT_ID) {
     // Elegant sandbox fallback so that the applet works flawlessly in AI Studio out of the box
-    const authUrl = `${appUrl}/callback?code=mock_sandbox_code`;
+    const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+    const authUrl = `${appUrl}/api/callback?code=mock_sandbox_code`;
     return res.json({ url: authUrl, is_mock: true });
   }
 
-  const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(
-    redirectUri
-  )}&scope=repo,workflow,admin:repo_hook`;
+  const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=repo%20workflow`;
   res.json({ url: authUrl });
 });
 
 app.get("/api/callback", async (req, res) => {
   const { code } = req.query;
-  const clientId = process.env.GITHUB_CLIENT_ID || "";
-  const clientSecret = process.env.GITHUB_CLIENT_SECRET || "";
-  const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-  const redirectUri = `${appUrl}/callback`;
 
   // Verify GITHUB_CLIENT_ID configuration
-  if (!clientId) {
+  if (!GITHUB_CLIENT_ID) {
+    // If it's a sandbox fallback code, we can bypass the GITHUB exchange and mock a token:
+    if (code === "mock_sandbox_code") {
+      const accessToken = "mock_sandbox_access_token_xyz123";
+      res.cookie("github_token", accessToken, {
+        httpOnly: false,
+        secure: true,
+        sameSite: "lax",
+        maxAge: 31536000000,
+      });
+      return res.send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Sandbox Authorization Success</title>
+            <style>
+                body {
+                    font-family: 'Inter', -apple-system, sans-serif;
+                    background-color: #020617;
+                    color: #F8FAFC;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100vh;
+                    margin: 0;
+                    text-align: center;
+                }
+                .card {
+                    background-color: #0F172A;
+                    border: 1px solid #1E293B;
+                    padding: 2.5rem;
+                    border-radius: 1.25rem;
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+                }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h2 style="color: #22D3EE; margin-top: 0; font-weight: 800;">Authorized via Sandbox</h2>
+                <p style="color: #94A3B8; font-size: 0.95rem;">Successfully connected to local workspace development mode.</p>
+            </div>
+            <script>
+                const token = "${accessToken}";
+                if (window.opener) {
+                    window.opener.postMessage({ type: "OAUTH_AUTH_SUCCESS", token: token }, "*");
+                    setTimeout(() => { window.close(); }, 1000);
+                } else {
+                    window.location.href = "/?token=" + token + "#dashboard-section";
+                }
+            </script>
+        </body>
+        </html>
+      `);
+    }
+
     return res.status(400).send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -401,7 +459,7 @@ app.get("/api/callback", async (req, res) => {
       <body>
           <div class="card">
               <h1>GitHub OAuth Setup Required</h1>
-              <p>GitHub Client ID is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio, or use the Personal Access Token (PAT) option instead!</p>
+              <p>GitHub Client ID or Secret is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio, or use the Personal Access Token (PAT) option instead!</p>
           </div>
       </body>
       </html>
@@ -416,10 +474,10 @@ app.get("/api/callback", async (req, res) => {
         Accept: "application/json",
       },
       body: JSON.stringify({
-        client_id: clientId,
-        client_secret: clientSecret,
+        client_id: GITHUB_CLIENT_ID,
+        client_secret: GITHUB_CLIENT_SECRET,
         code,
-        redirect_uri: redirectUri,
+        redirect_uri: REDIRECT_URI,
       }),
     });
 
@@ -429,6 +487,14 @@ app.get("/api/callback", async (req, res) => {
     if (req.headers.accept && req.headers.accept.includes("application/json")) {
       return res.json({ access_token: accessToken });
     }
+
+    // Save in secure browser Cookie as requested
+    res.cookie("github_token", accessToken, {
+      httpOnly: false,
+      secure: true,
+      sameSite: "lax",
+      maxAge: 31536000000,
+    });
 
     res.send(`
       <!DOCTYPE html>
@@ -485,7 +551,7 @@ app.get("/api/callback", async (req, res) => {
                   window.opener.postMessage({ type: "OAUTH_AUTH_SUCCESS", token: token }, "*");
                   setTimeout(() => { window.close(); }, 1000);
               } else {
-                  window.location.href = "/?token=" + token;
+                  window.location.href = "/?token=" + token + "#dashboard-section";
               }
           </script>
       </body>

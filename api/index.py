@@ -1154,10 +1154,22 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
+GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID")
+GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET")
+REDIRECT_URI = "https://multi-bot-hosting-platform.vercel.app/api/callback"
+
+# Secure fallback warning check
+if not GITHUB_CLIENT_ID:
+    print("[DEBUG] GITHUB_CLIENT_ID environment variable is missing!")
+    logger.warning("GITHUB_CLIENT_ID environment variable is missing!")
+if not GITHUB_CLIENT_SECRET:
+    print("[DEBUG] GITHUB_CLIENT_SECRET environment variable is missing!")
+    logger.warning("GITHUB_CLIENT_SECRET environment variable is missing!")
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     # Dynamic insertion of Client ID to avoid hardcoded credentials in code assets
-    client_id = os.environ.get("GITHUB_CLIENT_ID", "")
+    client_id = GITHUB_CLIENT_ID or ""
     html_content = DASHBOARD_HTML.replace("__GITHUB_CLIENT_ID__", client_id)
     return HTMLResponse(content=html_content)
 
@@ -1171,20 +1183,13 @@ async def health():
 
 @app.get("/api/login")
 async def login(request: Request):
-    client_id = os.environ.get("GITHUB_CLIENT_ID", "")
-    app_url = os.environ.get("APP_URL", "")
-    if not app_url:
-        app_url = str(request.base_url).rstrip("/")
-        
-    redirect_uri = f"{app_url}/api/callback"
-    auth_url = f"https://github.com/login/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&scope=repo,workflow,admin:repo_hook"
+    auth_url = f"https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID or ''}&redirect_uri={REDIRECT_URI}&scope=repo%20workflow"
     return {"url": auth_url}
 
 @app.get("/api/callback")
 async def oauth_callback(code: str, request: Request):
-    client_id = os.environ.get("GITHUB_CLIENT_ID", "")
-    client_secret = os.environ.get("GITHUB_CLIENT_SECRET", "")
-    if not client_id:
+    if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
+        print("[DEBUG] GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET is missing during callback handling!")
         error_html = """
         <!DOCTYPE html>
         <html lang="en">
@@ -1218,18 +1223,12 @@ async def oauth_callback(code: str, request: Request):
         <body>
             <div class="card">
                 <h1>GitHub OAuth Setup Required</h1>
-                <p>GitHub Client ID is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio, or use the Personal Access Token (PAT) option instead!</p>
+                <p>GitHub Client ID or Secret is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio, or use the Personal Access Token (PAT) option instead!</p>
             </div>
         </body>
         </html>
         """
         return HTMLResponse(content=error_html, status_code=400)
-
-    app_url = os.environ.get("APP_URL", "")
-    if not app_url:
-        app_url = str(request.base_url).rstrip("/")
-    
-    redirect_uri = f"{app_url}/api/callback"
 
     async with httpx.AsyncClient() as client:
         # Exchange code for access token
@@ -1237,10 +1236,10 @@ async def oauth_callback(code: str, request: Request):
             "https://github.com/login/oauth/access_token",
             headers={"Accept": "application/json"},
             data={
-                "client_id": client_id,
-                "client_secret": client_secret,
+                "client_id": GITHUB_CLIENT_ID,
+                "client_secret": GITHUB_CLIENT_SECRET,
                 "code": code,
-                "redirect_uri": redirect_uri
+                "redirect_uri": REDIRECT_URI
             }
         )
         data = resp.json()
@@ -1306,13 +1305,23 @@ async def oauth_callback(code: str, request: Request):
                 window.opener.postMessage({{ type: "OAUTH_AUTH_SUCCESS", token: token }}, "*");
                 setTimeout(() => {{ window.close(); }}, 1000);
             }} else {{
-                window.location.href = "/?token=" + token;
+                window.location.href = "/?token=" + token + "#dashboard-section";
             }}
         </script>
     </body>
     </html>
     """
-    return HTMLResponse(content=html_content)
+    response = HTMLResponse(content=html_content)
+    if access_token:
+        response.set_cookie(
+            key="github_token",
+            value=access_token,
+            httponly=False,
+            secure=True,
+            samesite="lax",
+            max_age=31536000
+        )
+    return response
 
 @app.get("/api/repos")
 async def get_repositories(token: str = Query(...)):
@@ -1380,9 +1389,9 @@ async def launch_bot(payload: LaunchRequest):
     if "movie" in script_name:
         py_content = MOVIE_BOT_PY
         actual_script = "movie_bot"
-    elif "support" in script_name:
+    elif "support" in script_name or "management" in script_name:
         py_content = SUPPORT_BOT_PY
-        actual_script = "support_bot"
+        actual_script = "management_bot"
     elif "feedback" in script_name:
         py_content = FEEDBACK_BOT_PY
         actual_script = "feedback_bot"
