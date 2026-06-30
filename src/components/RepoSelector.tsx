@@ -100,9 +100,9 @@ export default function RepoSelector({
                   }`}>
                     <Github className="w-4 h-4" />
                   </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-[#F0F6FF] group-hover:text-[#00D4FF] transition-colors">
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-mono font-bold text-[#F0F6FF] group-hover:text-[#00D4FF] transition-colors truncate max-w-[130px] sm:max-w-[180px]" title={repo.name}>
                         {repo.name}
                       </span>
                       <span className="text-[9px] font-mono tracking-widest px-1.5 py-0.5 rounded-full bg-[#050B18]/80 border border-[#00D4FF]/10 text-[#4A6080] flex items-center gap-1">
@@ -119,14 +119,14 @@ export default function RepoSelector({
 
                 <button
                   type="button"
-                  className={`px-3 py-1.5 rounded-lg font-mono text-[10px] font-bold tracking-wider uppercase transition-all flex items-center gap-1 ${
+                  className={`px-3 py-1.5 rounded-lg font-mono text-[10px] font-bold tracking-wider uppercase transition-all flex items-center gap-1 shrink-0 whitespace-nowrap ${
                     isSelected
                       ? 'bg-[#00D4FF] text-[#050B18]'
                       : 'bg-[#00D4FF]/10 text-[#00D4FF] group-hover:bg-[#00D4FF] group-hover:text-[#050B18]'
                   }`}
                 >
                   Import
-                  <ChevronRight className="w-3 h-3" />
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             );

@@ -13,6 +13,11 @@ interface NewProjectModalProps {
   isFetchingRepos: boolean;
   githubToken: string;
   onDeploySuccess: () => void;
+  initialData?: {
+    repoName: string;
+    botToken: string;
+    scriptName: string;
+  } | null;
 }
 
 type WizardStep = 'select_repo' | 'configure' | 'deploying' | 'live';
@@ -23,13 +28,31 @@ export default function NewProjectModal({
   repos,
   isFetchingRepos,
   githubToken,
-  onDeploySuccess
+  onDeploySuccess,
+  initialData = null
 }: NewProjectModalProps) {
   const [step, setStep] = useState<WizardStep>('select_repo');
   const [selectedRepo, setSelectedRepo] = useState('');
   const [botToken, setBotToken] = useState('');
   const [selectedScript, setSelectedScript] = useState('movie_bot.py');
   const [deployResult, setDeployResult] = useState<any>(null);
+
+  // Sync initialData for duplication config cloned runs
+  React.useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        setSelectedRepo(initialData.repoName);
+        setBotToken(initialData.botToken);
+        setSelectedScript(initialData.scriptName);
+        setStep('configure');
+      } else {
+        setStep('select_repo');
+        setSelectedRepo('');
+        setBotToken('');
+        setSelectedScript('movie_bot.py');
+      }
+    }
+  }, [isOpen, initialData]);
 
   if (!isOpen) return null;
 

@@ -20,6 +20,8 @@ export interface Project {
   created_at: string;
   request_count: number;
   last_request_time?: string;
+  started_at?: string;
+  health?: 'healthy' | 'degraded' | 'down';
 }
 
 export interface LogEntry {

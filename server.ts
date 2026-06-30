@@ -19,6 +19,8 @@ interface Project {
   created_at: string;
   request_count: number;
   last_request_time?: string;
+  started_at?: string;
+  health?: 'healthy' | 'degraded' | 'down';
 }
 
 const PROJECTS_FILE = path.join(process.cwd(), "projects_store.json");
@@ -738,12 +740,16 @@ app.post("/api/launch", async (req, res) => {
       username: botUsername,
       status: "online" as const,
       created_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
       request_count: existingIdx !== -1 ? projects[existingIdx].request_count : 0,
       last_request_time: existingIdx !== -1 ? projects[existingIdx].last_request_time : undefined,
     };
 
     if (existingIdx !== -1) {
-      projects[existingIdx] = newProj;
+      projects[existingIdx] = {
+        ...newProj,
+        created_at: projects[existingIdx].created_at || newProj.created_at,
+      };
     } else {
       projects.push(newProj);
     }
@@ -759,6 +765,39 @@ app.post("/api/launch", async (req, res) => {
   } catch (exc: any) {
     console.error(`Launch failed:`, exc);
     res.status(500).json({ success: false, message: exc.message });
+  }
+});
+
+app.post("/api/restart", async (req, res) => {
+  const { repo_name, github_token } = req.body;
+  if (!repo_name) {
+    return res.status(400).json({ success: false, detail: "Missing repo_name" });
+  }
+
+  const existingIdx = projects.findIndex((p) => p.repo_name === repo_name);
+  if (existingIdx === -1) {
+    return res.status(404).json({ success: false, detail: "Bot not found" });
+  }
+
+  // Set status to offline first, wait brief moment, then online to simulate restart
+  projects[existingIdx].status = "offline";
+  saveProjects(projects);
+
+  try {
+    // If it's a demo or normal token, simulate restart
+    await new Promise(r => setTimeout(r, 1200));
+    
+    projects[existingIdx].status = "online";
+    projects[existingIdx].started_at = new Date().toISOString();
+    projects[existingIdx].last_request_time = new Date().toISOString();
+    saveProjects(projects);
+
+    res.json({
+      success: true,
+      message: `Daemon node for ${repo_name} successfully restarted.`,
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
   }
 });
 

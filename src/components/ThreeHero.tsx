@@ -1,120 +1,70 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
-export default function ThreeHero() {
+interface ThreeHeroProps {
+  reduceAnimation?: boolean;
+}
+
+export default function ThreeHero({ reduceAnimation }: ThreeHeroProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (reduceAnimation || !containerRef.current) return;
 
     // --- SETUP SCENE, CAMERA, RENDERER ---
     const scene = new THREE.Scene();
     
-    // Add atmospheric ambient fog
-    scene.background = null; // Transparent background to show the CSS gradient underneath
-    scene.fog = new THREE.FogExp2('#050B18', 0.08);
+    // Ambient fog
+    scene.background = null; 
+    scene.fog = new THREE.FogExp2('#050B18', 0.07);
 
-    const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight;
+    const width = containerRef.current.clientWidth || window.innerWidth;
+    const height = containerRef.current.clientHeight || window.innerHeight;
     
     const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 100);
-    camera.position.z = 7;
+    camera.position.z = 8;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     containerRef.current.appendChild(renderer.domElement);
 
-    // --- OBJECTS ---
     const group = new THREE.Group();
     scene.add(group);
 
-    // 1. Central Core Wireframe Icosahedron (Representing Serverless Network Database)
-    const coreGeometry = new THREE.IcosahedronGeometry(2.3, 1);
+    // --- CENTRAL CORE STRUCTURE (GLOWING HOST SYNC GRID) ---
+    const coreGeometry = new THREE.IcosahedronGeometry(2.0, 1);
     const coreMaterial = new THREE.MeshBasicMaterial({
       color: 0x00D4FF,
       wireframe: true,
       transparent: true,
-      opacity: 0.25,
+      opacity: 0.15,
     });
     const coreMesh = new THREE.Mesh(coreGeometry, coreMaterial);
     group.add(coreMesh);
 
-    // 2. Glowing Nodes at Vertices
-    const vertexGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+    // --- CORE GLOW VERTICES ---
+    const vertexGeometry = new THREE.SphereGeometry(0.06, 8, 8);
     const vertexMaterial = new THREE.MeshBasicMaterial({
       color: 0x7C3AED,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.6,
     });
 
     const positions = coreGeometry.attributes.position;
     const vertexGroup = new THREE.Group();
-    
     for (let i = 0; i < positions.count; i++) {
       const x = positions.getX(i);
       const y = positions.getY(i);
       const z = positions.getZ(i);
-      
       const vMesh = new THREE.Mesh(vertexGeometry, vertexMaterial);
       vMesh.position.set(x, y, z);
       vertexGroup.add(vMesh);
     }
     group.add(vertexGroup);
 
-    // 3. Floating Orbiting Bots (Octahedrons)
-    const botCount = 3;
-    const bots: THREE.Mesh[] = [];
-    const botAngles: number[] = [];
-    const botSpeeds: number[] = [0.008, 0.005, 0.006];
-    const botRadii: number[] = [3.8, 4.4, 4.1];
-    const botColors = [0x00FF87, 0x00D4FF, 0xFF3B6B];
-
-    for (let i = 0; i < botCount; i++) {
-      const botGeom = new THREE.OctahedronGeometry(0.3, 0);
-      const botMat = new THREE.MeshBasicMaterial({
-        color: botColors[i],
-        wireframe: true,
-        transparent: true,
-        opacity: 0.9,
-      });
-      const botMesh = new THREE.Mesh(botGeom, botMat);
-      
-      // Floating initial offsets
-      botAngles.push((i * Math.PI * 2) / botCount);
-      group.add(botMesh);
-      bots.push(botMesh);
-    }
-
-    // 4. Glowing Data Packet Particles (Rising / Orbiting Telemetry Stream)
-    const particleCount = 280;
-    const particleGeometry = new THREE.BufferGeometry();
-    const particlePositions = new Float32Array(particleCount * 3);
-    const particleSpeeds: number[] = [];
-
-    for (let i = 0; i < particleCount; i++) {
-      // Position particles in a spherical region surrounding our core network
-      const u = Math.random();
-      const v = Math.random();
-      const theta = u * 2.0 * Math.PI;
-      const phi = Math.acos(2.0 * v - 1.0);
-      const r = 2.5 + Math.random() * 4.5; // distance from core
-
-      const x = r * Math.sin(phi) * Math.cos(theta);
-      const y = r * Math.sin(phi) * Math.sin(theta);
-      const z = r * Math.cos(phi);
-
-      particlePositions[i * 3] = x;
-      particlePositions[i * 3 + 1] = y;
-      particlePositions[i * 3 + 2] = z;
-
-      particleSpeeds.push(0.01 + Math.random() * 0.015);
-    }
-
-    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-
-    // Custom Canvas Texture for beautiful round particles (instead of square boxes)
-    const createCircleTexture = () => {
+    // --- DYNAMIC PARTICLE GENERATOR TEXTURE ---
+    const createCircleTexture = (colorStr: string) => {
       const canvas = document.createElement('canvas');
       canvas.width = 16;
       canvas.height = 16;
@@ -122,46 +72,138 @@ export default function ThreeHero() {
       if (ctx) {
         const gradient = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
         gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        gradient.addColorStop(0.3, 'rgba(0, 212, 255, 0.8)');
-        gradient.addColorStop(1, 'rgba(0, 212, 255, 0)');
+        gradient.addColorStop(0.3, colorStr);
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, 16, 16);
       }
       return new THREE.CanvasTexture(canvas);
     };
 
-    const particleMaterial = new THREE.PointsMaterial({
+    const cyanTexture = createCircleTexture('rgba(0, 212, 255, 0.8)');
+    const violetTexture = createCircleTexture('rgba(124, 58, 237, 0.8)');
+    const roseTexture = createCircleTexture('rgba(255, 59, 107, 0.8)');
+
+    // --- DEPTH LAYERING (THREE SEPARATE PARTICLE CLOUDS) ---
+    // Layer 1: Front / Fast / Cyan-Teal
+    const pCount1 = 80;
+    const geom1 = new THREE.BufferGeometry();
+    const pos1 = new Float32Array(pCount1 * 3);
+    const speeds1: number[] = [];
+    
+    // Layer 2: Middle / Medium Speed / Purple (Connecting Lines Layer)
+    const pCount2 = 140;
+    const geom2 = new THREE.BufferGeometry();
+    const pos2 = new Float32Array(pCount2 * 3);
+    const speeds2: number[] = [];
+
+    // Layer 3: Background / Slow / Rose-Pink
+    const pCount3 = 200;
+    const geom3 = new THREE.BufferGeometry();
+    const pos3 = new Float32Array(pCount3 * 3);
+    const speeds3: number[] = [];
+
+    const initializePositions = (positionsArr: Float32Array, speedsArr: number[], radiusMin: number, radiusMax: number, baseSpeed: number) => {
+      const count = positionsArr.length / 3;
+      for (let i = 0; i < count; i++) {
+        const u = Math.random();
+        const v = Math.random();
+        const theta = u * 2.0 * Math.PI;
+        const phi = Math.acos(2.0 * v - 1.0);
+        const r = radiusMin + Math.random() * (radiusMax - radiusMin);
+
+        positionsArr[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        positionsArr[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        positionsArr[i * 3 + 2] = r * Math.cos(phi);
+
+        speedsArr.push(baseSpeed * (0.6 + Math.random() * 0.8));
+      }
+    };
+
+    initializePositions(pos1, speeds1, 2.5, 6.0, 0.012);
+    initializePositions(pos2, speeds2, 3.5, 8.5, 0.006);
+    initializePositions(pos3, speeds3, 5.5, 12.0, 0.003);
+
+    geom1.setAttribute('position', new THREE.BufferAttribute(pos1, 3));
+    geom2.setAttribute('position', new THREE.BufferAttribute(pos2, 3));
+    geom3.setAttribute('position', new THREE.BufferAttribute(pos3, 3));
+
+    const mat1 = new THREE.PointsMaterial({
       color: 0x00D4FF,
-      size: 0.16,
-      map: createCircleTexture(),
+      size: 0.22,
+      map: cyanTexture,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      opacity: 0.6,
+      opacity: 0.55,
     });
 
-    const particles = new THREE.Points(particleGeometry, particleMaterial);
-    group.add(particles);
+    const mat2 = new THREE.PointsMaterial({
+      color: 0x7C3AED,
+      size: 0.14,
+      map: violetTexture,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: 0.45,
+    });
+
+    const mat3 = new THREE.PointsMaterial({
+      color: 0xFF3B6B,
+      size: 0.08,
+      map: roseTexture,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: 0.35,
+    });
+
+    const points1 = new THREE.Points(geom1, mat1);
+    const points2 = new THREE.Points(geom2, mat2);
+    const points3 = new THREE.Points(geom3, mat3);
+
+    group.add(points1);
+    group.add(points2);
+    group.add(points3);
+
+    // --- CONNECTING LINE SEGMENTS FOR MIDDLE LAYER (VERCEL/LINEAR LOOK) ---
+    const lineMaxConnections = 150;
+    const lineGeometry = new THREE.BufferGeometry();
+    const linePositions = new Float32Array(lineMaxConnections * 2 * 3);
+    const lineColors = new Float32Array(lineMaxConnections * 2 * 3);
+    
+    lineGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+    lineGeometry.setAttribute('color', new THREE.BufferAttribute(lineColors, 3));
+    
+    const lineMaterial = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.14,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    
+    const connectionLines = new THREE.LineSegments(lineGeometry, lineMaterial);
+    group.add(connectionLines);
 
     // --- LIGHTS ---
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
 
-    const pointLight1 = new THREE.PointLight(0x00D4FF, 1.5, 30);
+    const pointLight1 = new THREE.PointLight(0x00D4FF, 1.8, 30);
     pointLight1.position.set(5, 5, 5);
     scene.add(pointLight1);
 
-    const pointLight2 = new THREE.PointLight(0x7C3AED, 1.5, 30);
+    const pointLight2 = new THREE.PointLight(0x7C3AED, 1.8, 30);
     pointLight2.position.set(-5, -5, 5);
     scene.add(pointLight2);
 
-    // --- MOUSE PARALLAX & SCROLL DEPTH TRACKING ---
+    // --- MOUSE PARALLAX & SCROLL DEPTH ---
     const mouse = { x: 0, y: 0, targetX: 0, targetY: 0 };
     const scroll = { y: 0, targetY: 0 };
     let requestIndex: number;
 
     const handleMouseMove = (e: MouseEvent) => {
-      // Normalize mouse to [-1, 1] range
       mouse.targetX = (e.clientX / window.innerWidth) * 2 - 1;
       mouse.targetY = -(e.clientY / window.innerHeight) * 2 + 1;
     };
@@ -173,19 +215,16 @@ export default function ThreeHero() {
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('scroll', handleScroll);
 
-    // --- TRIGGERED WEBHOOK ANIMATION SIGNAL ---
-    // Accelerates particles and creates a beautiful pulsing wave on test updates
+    // Pulse feedback trigger (on manual events)
     let pulseProgress = 0;
     let isPulsing = false;
-
     const handleWebhookSignal = () => {
       isPulsing = true;
       pulseProgress = 0;
     };
-
     window.addEventListener('test-webhook-triggered', handleWebhookSignal);
 
-    // Tab Focus check to save GPU resources
+    // Tab Focus Check
     let isTabVisible = true;
     const handleVisibilityChange = () => {
       isTabVisible = !document.hidden;
@@ -197,112 +236,164 @@ export default function ThreeHero() {
 
     const animate = () => {
       requestIndex = requestAnimationFrame(animate);
-      if (!isTabVisible) return; // Skip updating and rendering when page is unfocused
+      if (!isTabVisible) return; // Completely throttle when not active!
 
       const delta = clock.getDelta();
       const time = clock.getElapsedTime();
 
-      // Smooth interpolation for mouse coordinates (Lerp)
+      // Mouse Parallax Lerping
       mouse.x += (mouse.targetX - mouse.x) * 0.05;
       mouse.y += (mouse.targetY - mouse.y) * 0.05;
 
-      // Smooth scroll interpolation (Lerp)
+      // Scroll Lerping
       scroll.y += (scroll.targetY - scroll.y) * 0.05;
 
-      // Camera parallax
-      camera.position.x = mouse.x * 1.5;
-      camera.position.y = mouse.y * 1.5;
+      // Subtle camera offsets
+      camera.position.x = mouse.x * 2.2;
+      camera.position.y = mouse.y * 2.2;
+      camera.position.z = 8 + (scroll.y * 0.002);
       
-      // Move camera away or tilt on scroll
-      camera.position.z = 7 + (scroll.y * 0.003);
-      group.position.y = -scroll.y * 0.002;
-      group.rotation.x = scroll.y * 0.0005;
+      group.position.y = -scroll.y * 0.001;
+      group.rotation.x = scroll.y * 0.0002;
 
-      // Continuous Core Rotations
-      coreMesh.rotation.y += 0.003;
-      coreMesh.rotation.x += 0.0015;
-      vertexGroup.rotation.y += 0.003;
-      vertexGroup.rotation.x += 0.0015;
+      // Continuous Core wireframe updates
+      coreMesh.rotation.y += 0.0015;
+      coreMesh.rotation.x += 0.0008;
+      vertexGroup.rotation.y += 0.0015;
+      vertexGroup.rotation.x += 0.0008;
 
-      // Orbiting Bots Coordinates Update
-      for (let i = 0; i < botCount; i++) {
-        botAngles[i] += botSpeeds[i];
-        const angle = botAngles[i];
-        const radius = botRadii[i];
-        
-        // Complex vertical sin-wave floating motion
-        const botY = Math.sin(time + i) * 0.5;
-        
-        bots[i].position.x = Math.cos(angle) * radius;
-        bots[i].position.z = Math.sin(angle) * radius;
-        bots[i].position.y = botY;
+      // Swirl & rising drift for points
+      const p1Arr = points1.geometry.attributes.position.array as Float32Array;
+      const p2Arr = points2.geometry.attributes.position.array as Float32Array;
+      const p3Arr = points3.geometry.attributes.position.array as Float32Array;
 
-        // Individual Bot Spins
-        bots[i].rotation.y += 0.015;
-        bots[i].rotation.x += 0.01;
-      }
-
-      // Live Telemetry Particle drift up and wave rotations
-      const posArr = particles.geometry.attributes.position.array as Float32Array;
-      
-      for (let i = 0; i < particleCount; i++) {
-        // Slow rising swirl motion
-        posArr[i * 3 + 1] += particleSpeeds[i] * (isPulsing ? 4.5 : 1.0); // Speed up in a pulse
-        
-        // Loop particles when they float too high
-        if (posArr[i * 3 + 1] > 6) {
-          posArr[i * 3 + 1] = -6;
+      const updateLayerParticles = (arr: Float32Array, speeds: number[], limitY: number, pulseFactor: number) => {
+        const count = arr.length / 3;
+        for (let i = 0; i < count; i++) {
+          arr[i * 3 + 1] += speeds[i] * pulseFactor; // Rise up
+          
+          if (arr[i * 3 + 1] > limitY) {
+            arr[i * 3 + 1] = -limitY; // Loop back
+          }
+          arr[i * 3] += Math.sin(time * 0.5 + i) * 0.0015; // Sway side to side
         }
+      };
 
-        // Add subtle waving sway
-        posArr[i * 3] += Math.sin(time + i) * 0.0015;
+      const pulseFactor = isPulsing ? 4.5 : 1.0;
+      updateLayerParticles(p1Arr, speeds1, 6.0, pulseFactor);
+      updateLayerParticles(p2Arr, speeds2, 8.5, pulseFactor);
+      updateLayerParticles(p3Arr, speeds3, 12.0, pulseFactor);
+
+      points1.geometry.attributes.position.needsUpdate = true;
+      points2.geometry.attributes.position.needsUpdate = true;
+      points3.geometry.attributes.position.needsUpdate = true;
+
+      // Dynamic Connecting Lines calculation (Middle layer)
+      const linePosArr = connectionLines.geometry.attributes.position.array as Float32Array;
+      const lineColArr = connectionLines.geometry.attributes.color.array as Float32Array;
+      let lineIndex = 0;
+
+      for (let i = 0; i < pCount2; i++) {
+        if (lineIndex >= lineMaxConnections) break;
+
+        const x1 = p2Arr[i * 3];
+        const y1 = p2Arr[i * 3 + 1];
+        const z1 = p2Arr[i * 3 + 2];
+
+        // Find close neighbors
+        for (let j = i + 1; j < pCount2; j++) {
+          if (lineIndex >= lineMaxConnections) break;
+
+          const x2 = p2Arr[j * 3];
+          const y2 = p2Arr[j * 3 + 1];
+          const z2 = p2Arr[j * 3 + 2];
+
+          const dx = x1 - x2;
+          const dy = y1 - y2;
+          const dz = z1 - z2;
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+          // Connect if close enough
+          if (dist < 1.7) {
+            const alpha = (1.0 - dist / 1.7) * 0.25;
+
+            // Segment start coordinate
+            linePosArr[lineIndex * 6] = x1;
+            linePosArr[lineIndex * 6 + 1] = y1;
+            linePosArr[lineIndex * 6 + 2] = z1;
+
+            // Segment end coordinate
+            linePosArr[lineIndex * 6 + 3] = x2;
+            linePosArr[lineIndex * 6 + 4] = y2;
+            linePosArr[lineIndex * 6 + 5] = z2;
+
+            // Segment start color (indigo gradient blend)
+            lineColArr[lineIndex * 6] = 0.48;     // R (7C3AED violetish)
+            lineColArr[lineIndex * 6 + 1] = 0.22; // G
+            lineColArr[lineIndex * 6 + 2] = 0.92; // B
+
+            // Segment end color
+            lineColArr[lineIndex * 6 + 3] = 0.0;  // R (00D4FF cyan)
+            lineColArr[lineIndex * 6 + 4] = 0.83; // G
+            lineColArr[lineIndex * 6 + 5] = 1.0;  // B
+
+            lineIndex++;
+          }
+        }
       }
-      particles.geometry.attributes.position.needsUpdate = true;
 
-      // Pulse expansion effect triggered by /start hook simulator
+      // Fill remaining connection slots with zero to hide them
+      for (let k = lineIndex; k < lineMaxConnections; k++) {
+        linePosArr[k * 6] = 0;
+        linePosArr[k * 6 + 1] = 0;
+        linePosArr[k * 6 + 2] = 0;
+        linePosArr[k * 6 + 3] = 0;
+        linePosArr[k * 6 + 4] = 0;
+        linePosArr[k * 6 + 5] = 0;
+      }
+
+      connectionLines.geometry.attributes.position.needsUpdate = true;
+      connectionLines.geometry.attributes.color.needsUpdate = true;
+
+      // Pulse physics animation
       if (isPulsing) {
         pulseProgress += 0.02;
-        const scale = 1.0 + Math.sin(pulseProgress * Math.PI) * 0.15;
-        
+        const scale = 1.0 + Math.sin(pulseProgress * Math.PI) * 0.12;
         coreMesh.scale.set(scale, scale, scale);
         vertexGroup.scale.set(scale, scale, scale);
-        particleMaterial.size = 0.16 + Math.sin(pulseProgress * Math.PI) * 0.2;
+        mat1.size = 0.22 + Math.sin(pulseProgress * Math.PI) * 0.15;
 
         if (pulseProgress >= 1.0) {
           isPulsing = false;
           coreMesh.scale.set(1, 1, 1);
           vertexGroup.scale.set(1, 1, 1);
-          particleMaterial.size = 0.16;
+          mat1.size = 0.22;
         }
       }
 
-      // Group overall ambient tilt
-      group.rotation.y = time * 0.03 + mouse.x * 0.12;
+      // Group ambient rotation
+      group.rotation.y = time * 0.015 + mouse.x * 0.1;
 
       renderer.render(scene, camera);
     };
 
     animate();
 
-    // --- WINDOW RESIZE LISTENER ---
     const handleResize = () => {
       if (!containerRef.current) return;
       const w = containerRef.current.clientWidth;
       const h = containerRef.current.clientHeight;
-      
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      
       renderer.setSize(w, h);
     };
 
     const resizeObserver = new ResizeObserver(() => {
       handleResize();
     });
-    
     resizeObserver.observe(containerRef.current);
 
-    // --- CLEANUP DISPOSAL ---
+    // --- DISPOSAL CLEANUP ---
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('scroll', handleScroll);
@@ -319,32 +410,33 @@ export default function ThreeHero() {
         }
       }
 
-      // Explicitly dispose of Three.js objects to avoid WebGL context leaks
       coreGeometry.dispose();
       coreMaterial.dispose();
       vertexGeometry.dispose();
       vertexMaterial.dispose();
-      particleGeometry.dispose();
-      particleMaterial.dispose();
+      geom1.dispose();
+      geom2.dispose();
+      geom3.dispose();
+      mat1.dispose();
+      mat2.dispose();
+      mat3.dispose();
+      lineGeometry.dispose();
+      lineMaterial.dispose();
+      cyanTexture.dispose();
+      violetTexture.dispose();
+      roseTexture.dispose();
 
-      bots.forEach((bot) => {
-        bot.geometry.dispose();
-        if (Array.isArray(bot.material)) {
-          bot.material.forEach((mat) => mat.dispose());
-        } else {
-          bot.material.dispose();
-        }
-      });
-      
       renderer.dispose();
     };
-  }, []);
+  }, [reduceAnimation]);
+
+  if (reduceAnimation) return null;
 
   return (
     <div 
       ref={containerRef} 
       className="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-hidden"
-      style={{ mixBlendMode: 'screen' }}
+      style={{ mixBlendMode: 'screen', opacity: 0.35 }}
     />
   );
 }

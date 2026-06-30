@@ -20,7 +20,12 @@ import {
   Trash2,
   ExternalLink,
   Power,
-  Play
+  Play,
+  Settings,
+  Copy,
+  RotateCw,
+  Search,
+  Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Lenis from 'lenis';
@@ -227,17 +232,57 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
+  // System Preferences States
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [reduceAnimation, setReduceAnimation] = useState(() => localStorage.getItem('pref_reduce_animation') === 'true');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('pref_theme') as 'dark' | 'light') || 'dark');
+  const [enableNotifications, setEnableNotifications] = useState(() => localStorage.getItem('pref_notifications') !== 'false');
+
+  // Custom Toast Notification States
+  interface Toast {
+    id: string;
+    message: string;
+    type: 'success' | 'error' | 'info';
+  }
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
+
+  // Sync theme overrides
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light-theme');
+    } else {
+      document.documentElement.classList.remove('light-theme');
+    }
+  }, [theme]);
+
   // GitHub state
   const [githubToken, setGithubToken] = useState<string | null>(localStorage.getItem('github_token'));
   const [gitHubUser, setGitHubUser] = useState<any>(null);
   const [repos, setRepos] = useState<any[]>([]);
-  const [isFetchingRepos, setIsFetchingRepos] = useState(false);
+  const [isFetchingRepos, setIsRefreshingRepos] = useState(false);
   const [isFetchingUser, setIsFetchingUser] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   // Project modal & listings state
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
   const [activeProjects, setActiveProjects] = useState<Project[]>([]);
   const [botActionLoading, setBotActionLoading] = useState<string | null>(null);
+  const [botFilter, setBotFilter] = useState<'all' | 'active' | 'stopped' | 'error'>('all');
+  const [botSearch, setBotSearch] = useState('');
+
+  // Project Cloning/Duplication Config State
+  const [duplicateData, setDuplicateData] = useState<{
+    repoName: string;
+    botToken: string;
+    scriptName: string;
+  } | null>(null);
 
   // Real data telemetry stats state
   const [stats, setStats] = useState({
@@ -252,7 +297,7 @@ export default function App() {
   // Fetch GitHub User and Repos
   const fetchGitHubUserAndRepos = async (token: string) => {
     setIsFetchingUser(true);
-    setIsFetchingRepos(true);
+    setIsRefreshingRepos(true);
     try {
       const userResp = await fetch('https://api.github.com/user', {
         headers: {
@@ -274,7 +319,7 @@ export default function App() {
       console.error('Failed to fetch GitHub details:', err);
     } finally {
       setIsFetchingUser(false);
-      setIsFetchingRepos(false);
+      setIsRefreshingRepos(false);
     }
   };
 
@@ -368,18 +413,49 @@ export default function App() {
     }
   };
 
-  const handleDisconnectGitHub = () => {
+  const handleDisconnectClick = async () => {
     audio.playClick();
-    localStorage.removeItem('github_token');
-    setGithubToken(null);
-    setGitHubUser(null);
-    setRepos([]);
-    setActiveProjects([]);
+    if (!confirm('Are you absolutely sure you want to disconnect this node? Your active Telegram bot templates, tokens, and dashboard projects will be cleared.')) return;
+    
+    setIsDisconnecting(true);
+    addToast('Disconnecting from GitHub...', 'info');
+    
+    try {
+      await new Promise(r => setTimeout(r, 1200));
+      localStorage.removeItem('github_token');
+      setGithubToken(null);
+      setGitHubUser(null);
+      setRepos([]);
+      setActiveProjects([]);
+      audio.playSuccess();
+      addToast('Disconnected successfully.', 'success');
+    } catch (e: any) {
+      addToast('Disconnection failed: ' + e.message, 'error');
+    } finally {
+      setIsDisconnecting(false);
+    }
+  };
+
+  const handleRefreshRepos = async () => {
+    if (!githubToken) return;
+    setIsRefreshingRepos(true);
+    audio.playClick();
+    addToast('Refreshing repository listings...', 'info');
+    try {
+      await fetchGitHubUserAndRepos(githubToken);
+      audio.playSuccess();
+      addToast('Repository listing updated.', 'success');
+    } catch (e: any) {
+      addToast('Failed to sync: ' + e.message, 'error');
+    } finally {
+      setIsRefreshingRepos(false);
+    }
   };
 
   const handleSaveManualToken = (token: string) => {
     localStorage.setItem('github_token', token);
     setGithubToken(token);
+    addToast('GitHub token imported successfully.', 'success');
   };
 
   // Synchronize callbacks from popup oauth
@@ -399,6 +475,7 @@ export default function App() {
         const token = event.data.token;
         localStorage.setItem('github_token', token);
         setGithubToken(token);
+        addToast('GitHub connection established.', 'success');
       }
     };
     window.addEventListener('message', handleOAuthMessage);
@@ -413,6 +490,7 @@ export default function App() {
       localStorage.setItem('github_token', token);
       setGithubToken(token);
       window.history.replaceState({}, document.title, window.location.pathname);
+      addToast('GitHub session restored.', 'success');
     }
   }, []);
 
@@ -420,6 +498,7 @@ export default function App() {
   const handleStopBot = async (repoName: string) => {
     audio.playClick();
     setBotActionLoading(repoName);
+    addToast(`Initiating stop on daemon ${repoName}...`, 'info');
     try {
       const resp = await fetch('/api/stop', {
         method: 'POST',
@@ -431,9 +510,14 @@ export default function App() {
       });
       if (resp.ok) {
         await fetchProjectsAndStats();
+        audio.playSuccess();
+        addToast(`Daemon ${repoName} stopped successfully.`, 'success');
+      } else {
+        addToast('Failed to stop bot daemon.', 'error');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to stop bot:', err);
+      addToast('Connection failed: ' + err.message, 'error');
     } finally {
       setBotActionLoading(null);
     }
@@ -442,6 +526,7 @@ export default function App() {
   const handleStartBot = async (project: Project) => {
     audio.playClick();
     setBotActionLoading(project.repo_name);
+    addToast(`Starting daemon node ${project.repo_name}...`, 'info');
     try {
       const resp = await fetch('/api/launch', {
         method: 'POST',
@@ -455,19 +540,65 @@ export default function App() {
       });
       if (resp.ok) {
         await fetchProjectsAndStats();
+        audio.playSuccess();
+        addToast(`Daemon ${project.repo_name} is now online.`, 'success');
         window.dispatchEvent(new Event('test-webhook-triggered'));
+      } else {
+        addToast('Failed to start daemon node.', 'error');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to start bot:', err);
+      addToast('Connection failed: ' + err.message, 'error');
     } finally {
       setBotActionLoading(null);
     }
+  };
+
+  const handleRestartBot = async (repoName: string) => {
+    audio.playClick();
+    setBotActionLoading(repoName);
+    addToast(`Requesting daemon restart for ${repoName}...`, 'info');
+    try {
+      const resp = await fetch('/api/restart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_name: repoName,
+          github_token: githubToken || 'demo_p_token'
+        })
+      });
+      if (resp.ok) {
+        await fetchProjectsAndStats();
+        audio.playSuccess();
+        addToast(`Daemon node ${repoName} restarted successfully.`, 'success');
+        window.dispatchEvent(new Event('test-webhook-triggered'));
+      } else {
+        addToast('Failed to restart daemon.', 'error');
+      }
+    } catch (err: any) {
+      console.error('Failed to restart bot:', err);
+      addToast('Connection failed: ' + err.message, 'error');
+    } finally {
+      setBotActionLoading(null);
+    }
+  };
+
+  const handleDuplicateConfig = (project: Project) => {
+    audio.playClick();
+    setDuplicateData({
+      repoName: project.repo_name,
+      botToken: project.bot_token,
+      scriptName: project.script_name
+    });
+    setIsNewProjectOpen(true);
+    addToast('Configuration cloned. Make any adjustments to deploy.', 'success');
   };
 
   const handleDeleteProject = async (repoName: string) => {
     audio.playClick();
     if (!confirm('Are you sure you want to remove this project from your dashboard?')) return;
     setBotActionLoading(repoName);
+    addToast(`Deleting ${repoName} config...`, 'info');
     try {
       const resp = await fetch('/api/projects/delete', {
         method: 'POST',
@@ -476,9 +607,14 @@ export default function App() {
       });
       if (resp.ok) {
         await fetchProjectsAndStats();
+        audio.playSuccess();
+        addToast('Project removed from dashboard.', 'success');
+      } else {
+        addToast('Failed to delete config.', 'error');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete project:', err);
+      addToast('Connection failed: ' + err.message, 'error');
     } finally {
       setBotActionLoading(null);
     }
@@ -521,7 +657,7 @@ export default function App() {
           <nav 
             className={`fixed top-6 left-1/2 -translate-x-1/2 px-6 py-3.5 rounded-full flex items-center justify-between z-50 w-[90%] max-w-[1000px] transition-all duration-300 border ${
               isScrolled 
-                ? 'bg-[#0A1628]/80 border-[#00D4FF]/15 shadow-[0_30px_80px_rgba(0,0,0,0.5),0_0_40px_rgba(0,212,255,0.04)] backdrop-blur-md' 
+                ? 'bg-[#0A1628]/85 border-[#00D4FF]/15 shadow-[0_30px_80px_rgba(0,0,0,0.5),0_0_40px_rgba(0,212,255,0.04)] backdrop-blur-md' 
                 : 'bg-transparent border-transparent'
             }`}
           >
@@ -537,8 +673,9 @@ export default function App() {
               </span>
             </div>
 
-            <div className="flex items-center gap-3 sm:gap-6 text-[11px] font-mono tracking-wider">
+            <div className="flex items-center gap-3 sm:gap-4 text-[11px] font-mono tracking-wider">
               <button 
+                type="button"
                 onClick={handleToggleMute}
                 className="p-1.5 rounded-full border border-[#00D4FF]/10 bg-[#0A1628]/40 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/30 transition-all cursor-pointer"
                 title={isMuted ? "Unmute sounds" : "Mute sounds"}
@@ -546,11 +683,22 @@ export default function App() {
                 {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
               </button>
 
-              <button
-                onClick={handleDisconnectGitHub}
-                className="transition-all px-3 py-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 cursor-pointer text-[10px] font-mono tracking-wider font-semibold uppercase"
+              <button 
+                type="button"
+                onClick={() => { audio.playClick(); setIsSettingsOpen(true); }}
+                className="p-1.5 rounded-full border border-[#00D4FF]/10 bg-[#0A1628]/40 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/30 transition-all cursor-pointer"
+                title="System Settings"
               >
-                Sign Out
+                <Settings className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDisconnectClick}
+                disabled={isDisconnecting}
+                className="transition-all px-3 py-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 cursor-pointer text-[10px] font-mono tracking-wider font-semibold uppercase disabled:opacity-40"
+              >
+                {isDisconnecting ? 'Sign Out...' : 'Sign Out'}
               </button>
             </div>
           </nav>
@@ -709,7 +857,7 @@ export default function App() {
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      onClick={() => githubToken && fetchGitHubUserAndRepos(githubToken)}
+                      onClick={handleRefreshRepos}
                       disabled={isFetchingRepos || isFetchingUser}
                       className="p-2.5 rounded-xl border border-[#00D4FF]/10 bg-[#050B18]/60 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/35 transition-all cursor-pointer disabled:opacity-40"
                       title="Reload integrations"
@@ -718,10 +866,11 @@ export default function App() {
                     </button>
                     <button
                       type="button"
-                      onClick={handleDisconnectGitHub}
-                      className="px-4 py-2 rounded-xl border border-rose-500/20 bg-rose-500/5 text-rose-400 hover:bg-rose-500/10 transition-all font-mono text-[10px] uppercase tracking-wider cursor-pointer font-bold"
+                      onClick={handleDisconnectClick}
+                      disabled={isDisconnecting}
+                      className="px-4 py-2 rounded-xl border border-rose-500/20 bg-rose-500/5 text-rose-400 hover:bg-rose-500/10 transition-all font-mono text-[10px] uppercase tracking-wider cursor-pointer font-bold disabled:opacity-40"
                     >
-                      Disconnect Node
+                      {isDisconnecting ? 'Disconnecting...' : 'Disconnect Node'}
                     </button>
                   </div>
                 </div>
@@ -751,6 +900,42 @@ export default function App() {
                   />
                 </div>
 
+                {/* Search & Filter Toolbar */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border border-[#00D4FF]/10 bg-[#050B18]/50 rounded-xl mb-8">
+                  {/* Search Input */}
+                  <div className="relative w-full sm:max-w-xs">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4A6080]" />
+                    <input
+                      type="text"
+                      placeholder="Search nodes or handles..."
+                      value={botSearch}
+                      onChange={(e) => setBotSearch(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-[#050B18] border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#00D4FF]/50 focus:outline-none rounded-lg text-xs font-mono text-[#F0F6FF] placeholder-[#4A6080] transition-all"
+                    />
+                  </div>
+
+                  {/* Filter Tabs / Chips */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+                    {(['all', 'active', 'stopped'] as const).map((filterType) => {
+                      const isActive = botFilter === filterType;
+                      return (
+                        <button
+                          key={filterType}
+                          type="button"
+                          onClick={() => { audio.playClick(); setBotFilter(filterType); }}
+                          className={`px-3 py-1.5 rounded-lg border text-[10px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                            isActive
+                              ? 'bg-[#00D4FF]/10 border-[#00D4FF]/40 text-[#00D4FF] shadow-[0_0_15px_rgba(0,212,255,0.1)]'
+                              : 'bg-transparent border-[#00D4FF]/5 text-[#4A6080] hover:text-[#F0F6FF] hover:border-[#00D4FF]/15'
+                          }`}
+                        >
+                          {filterType}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Projects Section Grid */}
                 <div className="space-y-6">
                   <div className="flex items-center justify-between pb-4 border-b border-[#00D4FF]/5">
@@ -764,113 +949,165 @@ export default function App() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {/* Add Project Card Button */}
-                    <AddProjectCard onClick={() => setIsNewProjectOpen(true)} />
+                    <AddProjectCard onClick={() => { audio.playClick(); setIsNewProjectOpen(true); }} />
 
                     {/* Active Deployed Project Cards */}
-                    {activeProjects.map((project) => {
-                      const isOnline = project.status === 'online';
-                      const isLoadingAction = botActionLoading === project.repo_name;
+                    {activeProjects
+                      .filter((project) => {
+                        const matchesSearch = project.repo_name.toLowerCase().includes(botSearch.toLowerCase()) ||
+                                              project.username.toLowerCase().includes(botSearch.toLowerCase());
+                        if (!matchesSearch) return false;
+                        if (botFilter === 'all') return true;
+                        if (botFilter === 'active') return project.status === 'online';
+                        if (botFilter === 'stopped') return project.status === 'offline';
+                        return true;
+                      })
+                      .map((project) => {
+                        const isOnline = project.status === 'online';
+                        const isLoadingAction = botActionLoading === project.repo_name;
 
-                      return (
-                        <div
-                          key={project.id}
-                          className="premium-glass-card rounded-2xl p-5 border border-[#00D4FF]/10 bg-[#050B18]/40 flex flex-col justify-between min-h-[240px] relative overflow-hidden group hover:border-[#00D4FF]/30 transition-all duration-300"
-                        >
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#00D4FF]/5 to-transparent rounded-full filter blur-xl pointer-events-none"></div>
+                        // Human-friendly uptime display calculation
+                        const getUptimeText = (startedAt: string | undefined) => {
+                          if (!isOnline || !startedAt) return 'Offline';
+                          const diff = Date.now() - new Date(startedAt).getTime();
+                          if (diff <= 0) return 'Just started';
+                          const secs = Math.floor(diff / 1000);
+                          const mins = Math.floor(secs / 60);
+                          const hrs = Math.floor(mins / 60);
+                          const days = Math.floor(hrs / 24);
+                          
+                          if (days > 0) return `${days}d ${hrs % 24}h`;
+                          if (hrs > 0) return `${hrs}h ${mins % 60}m`;
+                          if (mins > 0) return `${mins}m ${secs % 60}s`;
+                          return `${secs}s`;
+                        };
 
-                          <div className="space-y-4">
-                            {/* Card status and username line */}
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-mono text-[#4A6080] tracking-wider truncate max-w-[150px]" title={project.repo_name}>
-                                {project.repo_name}
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-[#4A6080]/40'}`}></span>
-                                <span className={`text-[9px] font-mono uppercase font-bold tracking-widest ${isOnline ? 'text-emerald-400' : 'text-[#4A6080]'}`}>
-                                  {project.status}
+                        return (
+                          <div
+                            key={project.id}
+                            className="premium-glass-card rounded-2xl p-5 border border-[#00D4FF]/10 bg-[#050B18]/40 flex flex-col justify-between min-h-[260px] relative overflow-hidden group hover:border-[#00D4FF]/30 transition-all duration-300"
+                          >
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#00D4FF]/5 to-transparent rounded-full filter blur-xl pointer-events-none"></div>
+
+                            <div className="space-y-4">
+                              {/* Card status and username line */}
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9px] font-mono text-[#4A6080] tracking-wider truncate max-w-[130px]" title={project.repo_name}>
+                                  {project.repo_name}
                                 </span>
+                                <div className="flex items-center gap-2">
+                                  <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`}></span>
+                                  <span className={`text-[9px] font-mono uppercase font-bold tracking-widest ${isOnline ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {isOnline ? 'online' : 'offline'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Bot Details */}
+                              <div className="space-y-1">
+                                <a
+                                  href={`https://t.me/${project.username}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-sm font-display font-extrabold text-white hover:text-[#00D4FF] transition-all flex items-center gap-1.5"
+                                >
+                                  @{project.username}
+                                  <ExternalLink className="w-3.5 h-3.5 text-[#4A6080] group-hover:text-[#00D4FF]" />
+                                </a>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[9px] font-mono tracking-widest px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase font-semibold">
+                                    {project.script_name.replace('.py', '')}
+                                  </span>
+                                  <span className="text-[9px] font-mono tracking-widest px-2 py-0.5 rounded-full bg-[#00D4FF]/5 text-[#00D4FF] border border-[#00D4FF]/10 uppercase font-semibold">
+                                    {project.health || 'healthy'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Live Telemetry inside Card */}
+                              <div className="pt-3 border-t border-[#00D4FF]/5 grid grid-cols-2 gap-2 font-mono text-[10px]">
+                                <div>
+                                  <span className="text-[#4A6080] block">TRIGGER HIT</span>
+                                  <span className="text-white font-bold">{project.request_count} times</span>
+                                </div>
+                                <div>
+                                  <span className="text-[#4A6080] block">ACTIVE UPTIME</span>
+                                  <span className={`font-bold ${isOnline ? 'text-emerald-400' : 'text-[#4A6080]'}`}>
+                                    {getUptimeText(project.started_at)}
+                                  </span>
+                                </div>
                               </div>
                             </div>
 
-                            {/* Bot Details */}
-                            <div className="space-y-1">
-                              <a
-                                href={`https://t.me/${project.username}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm font-display font-extrabold text-white hover:text-[#00D4FF] transition-all flex items-center gap-1.5"
+                            {/* Quick controls bar */}
+                            <div className="flex items-center gap-2 pt-4 border-t border-[#00D4FF]/5">
+                              {isOnline ? (
+                                <div className="flex items-center gap-2 w-full">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStopBot(project.repo_name)}
+                                    disabled={isLoadingAction}
+                                    className="flex-1 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+                                  >
+                                    {isLoadingAction ? (
+                                      <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                                    ) : (
+                                      <>
+                                        <Power className="w-3 h-3" />
+                                        Stop Node
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRestartBot(project.repo_name)}
+                                    disabled={isLoadingAction}
+                                    className="p-2 rounded-xl border border-[#00D4FF]/25 bg-[#00D4FF]/5 text-[#00D4FF] hover:bg-[#00D4FF]/15 transition-all cursor-pointer disabled:opacity-40"
+                                    title="Restart Daemon"
+                                  >
+                                    <RotateCw className={`w-3.5 h-3.5 ${isLoadingAction ? 'animate-spin' : ''}`} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartBot(project)}
+                                  disabled={isLoadingAction}
+                                  className="flex-1 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+                                >
+                                  {isLoadingAction ? (
+                                    <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+                                  ) : (
+                                    <>
+                                      <Play className="w-3 h-3 fill-current" />
+                                      Start Node
+                                    </>
+                                  )}
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateConfig(project)}
+                                className="p-2 rounded-xl border border-purple-500/15 text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/10 transition-all cursor-pointer"
+                                title="Duplicate Config"
                               >
-                                @{project.username}
-                                <ExternalLink className="w-3.5 h-3.5 text-[#4A6080] group-hover:text-[#00D4FF]" />
-                              </a>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-mono tracking-widest px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase font-semibold">
-                                  {project.script_name.replace('.py', '')}
-                                </span>
-                              </div>
-                            </div>
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
 
-                            {/* Live Telemetry inside Card */}
-                            <div className="pt-3 border-t border-[#00D4FF]/5 grid grid-cols-2 gap-2 font-mono text-[10px]">
-                              <div>
-                                <span className="text-[#4A6080] block">TRIGGER HIT</span>
-                                <span className="text-white font-bold">{project.request_count} times</span>
-                              </div>
-                              <div>
-                                <span className="text-[#4A6080] block">PROVISIONED</span>
-                                <span className="text-white">
-                                  {new Date(project.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                </span>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteProject(project.repo_name)}
+                                disabled={isLoadingAction}
+                                className="p-2 rounded-xl border border-rose-500/15 text-rose-400/60 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer disabled:opacity-40"
+                                title="Delete project from dashboard"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-
-                          {/* Quick controls bar */}
-                          <div className="flex items-center gap-2 pt-4 border-t border-[#00D4FF]/5">
-                            {isOnline ? (
-                              <button
-                                onClick={() => handleStopBot(project.repo_name)}
-                                disabled={isLoadingAction}
-                                className="flex-1 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
-                              >
-                                {isLoadingAction ? (
-                                  <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
-                                ) : (
-                                  <>
-                                    <Power className="w-3 h-3" />
-                                    Stop Node
-                                  </>
-                                )}
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleStartBot(project)}
-                                disabled={isLoadingAction}
-                                className="flex-1 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
-                              >
-                                {isLoadingAction ? (
-                                  <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
-                                ) : (
-                                  <>
-                                    <Play className="w-3 h-3 fill-current" />
-                                    Start Node
-                                  </>
-                                )}
-                              </button>
-                            )}
-
-                            <button
-                              onClick={() => handleDeleteProject(project.repo_name)}
-                              disabled={isLoadingAction}
-                              className="p-2 rounded-xl border border-rose-500/15 text-rose-400/60 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer disabled:opacity-40"
-                              title="Delete project from dashboard"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
                   </div>
                 </div>
               </motion.div>
@@ -881,14 +1118,233 @@ export default function App() {
             </footer>
           </div>
 
+          {/* Modern Premium Settings Drawer */}
+          <AnimatePresence>
+            {isSettingsOpen && (
+              <>
+                {/* Backdrop */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="fixed inset-0 bg-[#050B18]/80 backdrop-blur-sm z-[100] cursor-pointer"
+                />
+                
+                {/* Drawer Panel */}
+                <motion.div
+                  initial={{ x: '100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '100%' }}
+                  transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+                  className="fixed top-0 right-0 h-full w-full max-w-sm bg-[#050B18] border-l border-[#00D4FF]/10 p-6 z-[101] shadow-2xl flex flex-col justify-between"
+                >
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between pb-4 border-b border-[#00D4FF]/10">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-[#00D4FF] animate-pulse"></span>
+                        <h3 className="text-sm font-display font-extrabold text-[#F0F6FF] tracking-wider uppercase">
+                          System Preferences
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { audio.playClick(); setIsSettingsOpen(false); }}
+                        className="text-[#4A6080] hover:text-white transition-colors cursor-pointer text-xs font-mono font-bold uppercase"
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    <div className="space-y-5">
+                      {/* Theme Toggle option */}
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-mono tracking-widest text-[#4A6080] uppercase block">
+                          Visual Interface Theme
+                        </span>
+                        <div className="grid grid-cols-2 gap-2 p-1 bg-[#050B18]/80 border border-[#00D4FF]/10 rounded-xl">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              audio.playClick();
+                              setTheme('dark');
+                              localStorage.setItem('pref_theme', 'dark');
+                              addToast('Dark Theme configured successfully', 'success');
+                            }}
+                            className={`py-2 text-[10px] font-mono font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                              theme === 'dark'
+                                ? 'bg-[#00D4FF] text-[#050B18]'
+                                : 'text-[#4A6080] hover:text-white'
+                            }`}
+                          >
+                            Dark Slate
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              audio.playClick();
+                              setTheme('light');
+                              localStorage.setItem('pref_theme', 'light');
+                              addToast('Light Theme configured successfully', 'success');
+                            }}
+                            className={`py-2 text-[10px] font-mono font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                              theme === 'light'
+                                ? 'bg-[#00D4FF] text-[#050B18]'
+                                : 'text-[#4A6080] hover:text-white'
+                            }`}
+                          >
+                            Vercel Light
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Animations Toggle option */}
+                      <div className="flex items-center justify-between p-4 rounded-xl border border-[#00D4FF]/5 bg-[#050B18]/40">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-mono tracking-widest text-[#F0F6FF] uppercase block font-bold">
+                            Reduce Motion
+                          </span>
+                          <span className="text-[9px] text-[#4A6080] leading-relaxed block max-w-[180px]">
+                            Disables the WebGL 3D particle background to conserve CPU resources.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            audio.playClick();
+                            const next = !reduceAnimation;
+                            setReduceAnimation(next);
+                            localStorage.setItem('pref_reduce_animation', String(next));
+                            addToast(next ? 'Animations disabled' : 'Animations enabled', 'info');
+                          }}
+                          className={`w-10 h-6 rounded-full p-1 transition-colors cursor-pointer ${
+                            reduceAnimation ? 'bg-[#00D4FF]' : 'bg-[#4A6080]/20'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded-full bg-[#050B18] transition-transform ${
+                            reduceAnimation ? 'translate-x-4' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Sound Toggle option */}
+                      <div className="flex items-center justify-between p-4 rounded-xl border border-[#00D4FF]/5 bg-[#050B18]/40">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-mono tracking-widest text-[#F0F6FF] uppercase block font-bold">
+                            Sound FX
+                          </span>
+                          <span className="text-[9px] text-[#4A6080] leading-relaxed block max-w-[180px]">
+                            Enable auditory confirmation clicks and launch success signals.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = !isMuted;
+                            setIsMuted(next);
+                            audio.toggleMute();
+                            addToast(next ? 'Sound effects muted' : 'Sound effects unmuted', 'info');
+                          }}
+                          className={`w-10 h-6 rounded-full p-1 transition-colors cursor-pointer ${
+                            !isMuted ? 'bg-[#00D4FF]' : 'bg-[#4A6080]/20'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded-full bg-[#050B18] transition-transform ${
+                            !isMuted ? 'translate-x-4' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Notifications Toggle Option */}
+                      <div className="flex items-center justify-between p-4 rounded-xl border border-[#00D4FF]/5 bg-[#050B18]/40">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-mono tracking-widest text-[#F0F6FF] uppercase block font-bold">
+                            Daemon Notifications
+                          </span>
+                          <span className="text-[9px] text-[#4A6080] leading-relaxed block max-w-[180px]">
+                            Show error notifications if host nodes crash or degrade.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            audio.playClick();
+                            const next = !enableNotifications;
+                            setEnableNotifications(next);
+                            localStorage.setItem('pref_notifications', String(next));
+                            addToast(next ? 'Notifications enabled' : 'Notifications disabled', 'info');
+                          }}
+                          className={`w-10 h-6 rounded-full p-1 transition-colors cursor-pointer ${
+                            enableNotifications ? 'bg-[#00D4FF]' : 'bg-[#4A6080]/20'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded-full bg-[#050B18] transition-transform ${
+                            enableNotifications ? 'translate-x-4' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-[9px] font-mono text-[#4A6080] text-center pt-6 border-t border-[#00D4FF]/5">
+                    Multi-Bot Host Engine  —  v2.4.0
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+
+          {/* Custom Toast Notifications Container */}
+          <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none">
+            <AnimatePresence>
+              {toasts.map((toast) => (
+                <motion.div
+                  key={toast.id}
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className={`p-4 rounded-xl border flex items-center gap-3 shadow-xl backdrop-blur-md pointer-events-auto ${
+                    toast.type === 'success'
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                      : toast.type === 'error'
+                      ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+                      : 'bg-[#050B18]/90 border-[#00D4FF]/20 text-[#F0F6FF]'
+                  }`}
+                >
+                  <span className="flex-1 text-xs font-mono font-medium leading-relaxed">
+                    {toast.message}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+                    className="text-[#4A6080] hover:text-white transition-colors cursor-pointer text-[10px] font-bold uppercase font-mono px-1.5 py-0.5 rounded border border-transparent hover:border-[#4A6080]/30"
+                  >
+                    Dismiss
+                  </button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+
           {/* Vercel-Style Integration Multi-Step Wizard Modal */}
           <NewProjectModal
             isOpen={isNewProjectOpen}
-            onClose={() => setIsNewProjectOpen(false)}
+            onClose={() => {
+              setIsNewProjectOpen(false);
+              setDuplicateData(null);
+            }}
+            initialData={duplicateData ? {
+              repoName: duplicateData.repoName,
+              botToken: duplicateData.botToken,
+              scriptName: duplicateData.scriptName
+            } : undefined}
             repos={repos}
             isFetchingRepos={isFetchingRepos}
             githubToken={githubToken || 'demo_github_token'}
-            onDeploySuccess={fetchProjectsAndStats}
+            onDeploySuccess={() => {
+              fetchProjectsAndStats();
+              setDuplicateData(null);
+            }}
           />
         </motion.div>
       )}

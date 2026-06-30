@@ -60,7 +60,6 @@ export default function ProjectConfigForm({
       return;
     }
 
-    setUserHasTypedToken(true);
     setIsValidating(true);
     
     const delayDebounce = setTimeout(async () => {
@@ -139,7 +138,10 @@ export default function ProjectConfigForm({
               type={showToken ? 'text' : 'password'}
               required
               value={botToken}
-              onChange={(e) => setBotToken(e.target.value)}
+              onChange={(e) => {
+                setBotToken(e.target.value);
+                setUserHasTypedToken(true);
+              }}
               className={`w-full bg-[#050B18]/60 border rounded-xl pl-4 pr-12 py-3 text-xs text-[#F0F6FF] font-mono outline-none transition-all placeholder:text-[#4A6080] ${
                 userHasTypedToken
                   ? isValidating

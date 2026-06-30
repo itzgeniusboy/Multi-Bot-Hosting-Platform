@@ -56,10 +56,21 @@ export default function DeploymentConsole({
     setLogs((prev) => [...prev, { text, type, timestamp: getTimestamp() }]);
   };
 
+  const [logFilter, setLogFilter] = useState<'all' | 'info' | 'warning' | 'error'>('all');
+  const [isAutoScrollPaused, setIsAutoScrollPaused] = useState(false);
+
+  const filteredLogs = logs.filter((log) => {
+    if (logFilter === 'all') return true;
+    if (logFilter === 'info') return log.type === 'info' || log.type === 'success';
+    return log.type === logFilter;
+  });
+
   // Auto-scroll terminal
   useEffect(() => {
-    consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
+    if (!isAutoScrollPaused) {
+      consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, isAutoScrollPaused]);
 
   // Update a specific stage's status
   const updateStage = (id: string, status: StageStatus) => {
@@ -210,15 +221,69 @@ export default function DeploymentConsole({
 
       {/* Retro-Styled Monospace Console */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between px-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2">
           <span className="text-[10px] font-mono tracking-widest text-[#4A6080] uppercase flex items-center gap-1.5">
             <Terminal className="w-3.5 h-3.5 text-[#00D4FF]" />
             Live Deployment Console
           </span>
-          <span className="text-[9px] font-mono text-emerald-400 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            Streaming
-          </span>
+          
+          {/* Console Controls Bar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Filter pills */}
+            <div className="flex bg-[#050B18]/60 border border-[#00D4FF]/10 rounded-lg p-0.5">
+              {(['all', 'info', 'warning', 'error'] as const).map((lvl) => (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => setLogFilter(lvl)}
+                  className={`px-2 py-0.5 text-[9px] font-mono uppercase font-bold rounded transition-all cursor-pointer ${
+                    logFilter === lvl
+                      ? lvl === 'error'
+                        ? 'bg-rose-500 text-white'
+                        : lvl === 'warning'
+                        ? 'bg-amber-500 text-[#050B18]'
+                        : 'bg-[#00D4FF] text-[#050B18]'
+                      : 'text-[#4A6080] hover:text-white'
+                  }`}
+                >
+                  {lvl}
+                </button>
+              ))}
+            </div>
+
+            {/* Scroll Lock Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsAutoScrollPaused(!isAutoScrollPaused)}
+              className={`px-2.5 py-1 rounded-lg border text-[9px] font-mono font-bold tracking-wider uppercase transition-all cursor-pointer ${
+                isAutoScrollPaused
+                  ? 'border-amber-500/20 bg-amber-500/5 text-amber-400'
+                  : 'border-[#00D4FF]/10 bg-[#050B18]/60 text-[#4A6080] hover:text-white hover:border-[#00D4FF]/30'
+              }`}
+            >
+              {isAutoScrollPaused ? 'Scroll Paused' : 'Auto-Scroll'}
+            </button>
+
+            {/* Export log */}
+            <button
+              type="button"
+              onClick={() => {
+                const logText = logs.map(l => `[${l.timestamp}] [${l.type.toUpperCase()}] ${l.text}`).join('\n');
+                const blob = new Blob([logText], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `deploy_logs_${repoName.replace('/', '_')}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}
+              className="px-2.5 py-1 rounded-lg border border-[#00D4FF]/10 bg-[#050B18]/60 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/30 text-[9px] font-mono font-bold tracking-wider uppercase transition-all cursor-pointer"
+            >
+              Download
+            </button>
+          </div>
         </div>
 
         <div className="relative rounded-xl border border-[#00D4FF]/10 bg-[#02050B] overflow-hidden shadow-inner">
@@ -226,7 +291,7 @@ export default function DeploymentConsole({
           <div className="terminal-scanlines" />
 
           <div className="h-[280px] overflow-y-auto p-5 font-mono text-[11px] leading-relaxed space-y-2 scrollbar-thin select-text">
-            {logs.map((log, index) => (
+            {filteredLogs.map((log, index) => (
               <div
                 key={index}
                 className={`flex items-start gap-2.5 transition-all duration-300 ${
@@ -241,7 +306,7 @@ export default function DeploymentConsole({
               >
                 <span className="text-[#4A6080] shrink-0 font-medium">[{log.timestamp}]</span>
                 <span className="font-semibold text-[10px] tracking-wider shrink-0 uppercase">
-                  {log.type === 'info' ? 'info:' : log.type === 'success' ? 'ok:' : 'err:'}
+                  {log.type === 'info' ? 'info:' : log.type === 'success' ? 'ok:' : log.type === 'warning' ? 'warn:' : 'err:'}
                 </span>
                 <span className="flex-1 whitespace-pre-wrap">{log.text}</span>
               </div>
