@@ -286,20 +286,29 @@ export default function App() {
       const response = await fetch('/api/login');
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || errData.message || 'Failed to fetch authorization URL from server.');
+        const errMsg = errData.error || errData.message || 'Failed to fetch authorization URL from server.';
+        alert(`Server Error: ${errMsg}`);
+        throw new Error(errMsg);
       }
       const data = await response.json();
       if (data.url) {
         // Open GitHub OAuth URL directly in popup
         const popup = window.open(data.url, 'github_oauth_popup', 'width=600,height=700');
         if (!popup) {
-          throw new Error('Popup blocked! Please allow popups for this site, or open the app in a new tab to continue.');
+          const popupBlockedMsg = 'Popup blocked! Please allow popups for this site, or open the app in a new tab to continue.';
+          alert(popupBlockedMsg);
+          throw new Error(popupBlockedMsg);
         }
       } else {
-        throw new Error('Authentication endpoint did not return a valid redirection URL.');
+        const invalidUrlMsg = 'Authentication endpoint did not return a valid redirection URL.';
+        alert(invalidUrlMsg);
+        throw new Error(invalidUrlMsg);
       }
     } catch (e: any) {
       console.error('GitHub OAuth redirect construct error:', e);
+      if (e.message && !e.message.includes('Server Error:') && !e.message.includes('Popup blocked') && !e.message.includes('Authentication endpoint')) {
+        alert(`OAuth Error: ${e.message}`);
+      }
       throw e;
     }
   };

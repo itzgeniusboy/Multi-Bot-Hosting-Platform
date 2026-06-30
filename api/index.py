@@ -335,6 +335,9 @@ class StopRequest(BaseModel):
     repo_name: str
     github_token: Optional[str] = None
 
+# In-memory registry of active bot configurations
+ACTIVE_DAEMONS = {}
+
 # Sleek, premium dark cyberpunk single-page Vercel-like dashboard (absolutely NO simulated demo modes)
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -1174,20 +1177,33 @@ async def health():
 @app.get("/api/login")
 @app.get("/login")
 async def login(request: Request):
-    if not GITHUB_CLIENT_ID:
-        raise HTTPException(
-            status_code=400,
-            detail="GitHub OAuth GITHUB_CLIENT_ID configuration is missing under AI Studio settings."
+    try:
+        # Re-fetch or check global config
+        client_id = GITHUB_CLIENT_ID or os.environ.get("GITHUB_CLIENT_ID")
+        if not client_id:
+            logger.error("Environment variable GITHUB_CLIENT_ID is missing on the server")
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Environment variable GITHUB_CLIENT_ID is missing on the server"}
+            )
+        
+        dynamic_redirect = get_redirect_uri(request)
+        auth_url = f"https://github.com/login/oauth/authorize?client_id={client_id}&redirect_uri={dynamic_redirect}&scope=repo%20workflow"
+        return JSONResponse(status_code=200, content={"url": auth_url})
+    except Exception as e:
+        logger.error(f"Error generating login URL: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Internal server error generating login URL: {str(e)}"}
         )
-
-    dynamic_redirect = get_redirect_uri(request)
-    auth_url = f"https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&redirect_uri={dynamic_redirect}&scope=repo%20workflow"
-    return JSONResponse(status_code=200, content={"url": auth_url})
 
 @app.get("/api/callback")
 @app.get("/callback")
 async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
-    if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
+    client_id = GITHUB_CLIENT_ID or os.environ.get("GITHUB_CLIENT_ID")
+    client_secret = GITHUB_CLIENT_SECRET or os.environ.get("GITHUB_CLIENT_SECRET")
+
+    if not client_id or not client_secret:
         error_html = """
         <!DOCTYPE html>
         <html lang="en">
@@ -1229,19 +1245,103 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
         return HTMLResponse(content=error_html, status_code=400)
 
     dynamic_redirect = get_redirect_uri(request)
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            "https://github.com/login/oauth/access_token",
-            headers={"Accept": "application/json"},
-            data={
-                "client_id": GITHUB_CLIENT_ID,
-                "client_secret": GITHUB_CLIENT_SECRET,
-                "code": code,
-                "redirect_uri": dynamic_redirect
-            }
-        )
-        data = resp.json()
-        access_token = data.get("access_token", "")
+    access_token = ""
+    exchange_error = None
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://github.com/login/oauth/access_token",
+                headers={"Accept": "application/json"},
+                data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "code": code,
+                    "redirect_uri": dynamic_redirect
+                },
+                timeout=15.0
+            )
+            
+            if resp.status_code != 200:
+                raise Exception(f"GitHub returned HTTP status {resp.status_code}. Response: {resp.text}")
+            
+            data = resp.json()
+            if "error" in data:
+                error_msg = data.get("error")
+                error_desc = data.get("error_description", "No description available")
+                raise Exception(f"GitHub Error: {error_msg} - {error_desc}")
+                
+            access_token = data.get("access_token", "")
+            if not access_token:
+                raise Exception(f"Exchange succeeded but access_token was missing in the JSON response: {data}")
+    except Exception as e:
+        exchange_error = str(e)
+        logger.error(f"GitHub OAuth Callback Exchange Failure: {exchange_error}")
+
+    if exchange_error:
+        error_html = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Authentication Failed</title>
+            <style>
+                body {{
+                    font-family: 'Inter', -apple-system, sans-serif;
+                    background-color: #030712;
+                    color: #EF4444;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100vh;
+                    margin: 0;
+                }}
+                .card {{
+                    padding: 2.5rem;
+                    background: #0B111E;
+                    border: 1px solid rgba(239, 68, 68, 0.2);
+                    border-radius: 1rem;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                    max-width: 600px;
+                    width: 90%;
+                    text-align: left;
+                }}
+                h1 {{ color: #EF4444; margin-top: 0; margin-bottom: 1rem; text-align: center; }}
+                p {{ color: #94A3B8; line-height: 1.5; font-size: 0.95rem; }}
+                pre {{
+                    background: #030712;
+                    color: #F8FAFC;
+                    padding: 1rem;
+                    border-radius: 0.5rem;
+                    overflow-x: auto;
+                    font-family: monospace;
+                    font-size: 0.85rem;
+                    border: 1px solid #1E293B;
+                }}
+                .back-btn {{
+                    display: block;
+                    text-align: center;
+                    margin-top: 1.5rem;
+                    color: #00D4FF;
+                    text-decoration: none;
+                    font-weight: bold;
+                }}
+                .back-btn:hover {{
+                    text-decoration: underline;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>GitHub Exchange Failed</h1>
+                <p>The authorization code exchange with GitHub failed. Here are the details of the response received from GitHub's API:</p>
+                <pre>{exchange_error}</pre>
+                <a href="/" class="back-btn">← Return to Dashboard</a>
+            </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=error_html, status_code=500)
 
     if "application/json" in request.headers.get("accept", ""):
         return {"access_token": access_token}
@@ -1525,6 +1625,14 @@ async def launch_bot(payload: LaunchRequest, request: Request):
                 status_code=dispatch_resp.status_code, 
                 detail=f"Injected bot code files, but failed to activate runner dispatch event: {dispatch_resp.text}"
             )
+
+        # Register active bot session
+        ACTIVE_DAEMONS[repo_name] = {
+            "repo_name": repo_name,
+            "bot_username": bot_username,
+            "script_name": script_name,
+            "trigger_count": 0
+        }
 
         return {
             "success": True,
