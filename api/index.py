@@ -51,12 +51,12 @@ jobs:
 
       - name: Run Telegram Bot with Auto-Recycle Loop
         env:
-          BOT_TOKEN: ${{ github.event.client_payload.bot_token }}
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           GITHUB_PAT: ${{ github.event.client_payload.github_pat }}
           SCRIPT_NAME: ${{ github.event.client_payload.script_name }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          echo "Starting Telegram Bot: templates/$SCRIPT_NAME.py"
+          echo "Starting Telegram Bot: $SCRIPT_NAME"
           
           # We calculate the cutoff time 5.5 hours (19800 seconds) from now
           # GitHub Actions jobs timeout at 6 hours, so we recycle at 5.5 hours to be perfectly safe
@@ -65,7 +65,7 @@ jobs:
           
           while [ $(date +%s) -lt $END_TIME ]; do
             echo "Launching bot process..."
-            python templates/$SCRIPT_NAME.py &
+            python $SCRIPT_NAME &
             BOT_PID=$!
             
             # Monitor process status until cutoff time
@@ -89,12 +89,12 @@ jobs:
             -H "Authorization: token $GITHUB_PAT" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/$REPOSITORY/dispatches \
-            -d "{\\"event_type\\": \\"launch_bot\\", \\"client_payload\\": {\\"bot_token\\": \\"$BOT_TOKEN\\", \\"script_name\\": \\"$SCRIPT_NAME\\", \\"github_pat\\": \\"$GITHUB_PAT\\"}}"
+            -d "{\\"event_type\\": \\"launch_bot\\", \\"client_payload\\": {\\"script_name\\": \\"$SCRIPT_NAME\\", \\"github_pat\\": \\"$GITHUB_PAT\\"}}"
           
           echo "Dispatched successfully. This workflow block has terminated clean."
 """
 
-# Script templates
+# Preset script templates
 MOVIE_BOT_PY = """import os
 import sys
 import logging
@@ -108,7 +108,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("MovieBot")
 
-# Retrieve bot token from Environment
+# Retrieve bot token securely from Env
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 if not BOT_TOKEN:
@@ -117,7 +117,6 @@ if not BOT_TOKEN:
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="MARKDOWN")
 
-# Movie library
 MOVIES = {
     "interstellar": {
         "title": "Interstellar (2014)",
@@ -135,44 +134,44 @@ MOVIES = {
         "title": "The Dark Knight (2008)",
         "genre": "Action, Crime, Drama",
         "rating": "9.0/10",
-        "desc": "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice."
+        "desc": "When the menace known as the Joker wreaks havoc and chaos on Gotham, Batman must accept one of the greatest physical and psychological tests."
     }
 }
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     welcome_text = (
-        "Welcome to Movie Suggestion Bot!\\n\\n"
+        "🍿 *Welcome to Movie Suggestion Bot!*\\n\\n"
         "I am running 24x7 on our secure hosting platform via GitHub Actions.\\n\\n"
-        "Here are the commands you can use:\\n"
-        "list - View available blockbusters\\n"
-        "movie <name> - Search details about a blockbuster\\n"
-        "help - Show this assistance message"
+        "Commands available:\\n"
+        "• /list - View available blockbusters\\n"
+        "• /movie <name> - Search details about a film\\n"
+        "• /help - Show this assistance message"
     )
     bot.reply_to(message, welcome_text)
 
 @bot.message_handler(commands=['list'])
 def list_movies(message):
-    movie_list = "Available Movies:\\n" + "\\n".join([f"- *{m['title']}*" for m in MOVIES.values()])
+    movie_list = "*Available Blockbusters:*\\n" + "\\n".join([f"- *{m['title']}* (Type `/movie {k}`)" for k, m in MOVIES.items()])
     bot.reply_to(message, movie_list)
 
 @bot.message_handler(commands=['movie'])
 def search_movie(message):
     args = message.text.split()
     if len(args) < 2:
-        bot.reply_to(message, "Please specify a movie name. Example: /movie inception")
+        bot.reply_to(message, "Please specify a movie key. Example: `/movie inception`")
         return
     query = args[1].lower()
     if query in MOVIES:
         m = MOVIES[query]
-        info = f"*{m['title']}*\\n\\n*Genre:* {m['genre']}\\n*Rating:* {m['rating']}\\n\\n{m['desc']}"
+        info = f"🎬 *{m['title']}*\\n\\n*Genre:* {m['genre']}\\n*Rating:* ⭐ {m['rating']}\\n\\n{m['desc']}"
         bot.reply_to(message, info)
     else:
-        bot.reply_to(message, "Movie not found. Try 'inception', 'interstellar' or 'dark_knight'!")
+        bot.reply_to(message, "Movie not found. Try `/movie interstellar`, `/movie inception` or `/movie dark_knight`!")
 
 @bot.message_handler(func=lambda message: True)
 def echo_all(message):
-    bot.reply_to(message, "I am focused purely on movies! Send /list to find highly rated cinematic releases or /movie to query specifics.")
+    bot.reply_to(message, "Send /list to find blockbuster movies or /movie <name> to check stats.")
 
 if __name__ == "__main__":
     logger.info("Initializing Continuous Long-Polling...")
@@ -184,7 +183,6 @@ import sys
 import logging
 import telebot
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -192,7 +190,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("SupportBot")
 
-# Retrieve bot token from Environment
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 if not BOT_TOKEN:
@@ -204,39 +201,38 @@ bot = telebot.TeleBot(BOT_TOKEN, parse_mode="MARKDOWN")
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     welcome_text = (
-        "Welcome to the 24x7 Customer Support Bot!\\n\\n"
-        "How can we assist you today? Our support staff has configured this auto-responder to instantly route and log queries.\\n\\n"
-        "Please select an option or reply with your message:\\n"
-        "ticket - Register a support ticket\\n"
-        "faq - View frequently asked questions\\n"
-        "status - Check active system statuses"
+        "🛠️ *24x7 Customer Support Bot*\\n\\n"
+        "How can we assist you today? Instant routing is online.\\n\\n"
+        "• /ticket - Register a support ticket\\n"
+        "• /faq - View frequently asked questions\\n"
+        "• /status - Check active system statuses"
     )
     bot.reply_to(message, welcome_text)
 
 @bot.message_handler(commands=['faq'])
 def send_faq(message):
     faq_text = (
-        "Frequently Asked Questions\\n\\n"
-        "1. How do I deploy a bot?\\n"
+        "💡 *Frequently Asked Questions*\\n\\n"
+        "*Q: How do I deploy a bot?*\\n"
         "Simply type your token on our web dashboard and click Launch.\\n\\n"
-        "2. Is it 24x7?\\n"
-        "Yes! GitHub Actions workflows recycle automatically to provide uninterrupted uptime.\\n\\n"
-        "3. Is my token secure?\\n"
-        "Absolutely. Tokens are passed straight into secure workflows and never stored in plain text."
+        "*Q: Is it really 24x7?*\\n"
+        "Yes! GitHub Actions workflows recycle automatically to provide continuous runtime.\\n\\n"
+        "*Q: Is my token secure?*\\n"
+        "Absolutely. Tokens are saved securely to repository secrets."
     )
     bot.reply_to(message, faq_text)
 
 @bot.message_handler(commands=['ticket'])
 def raise_ticket(message):
-    bot.reply_to(message, "Support Ticket Raised! Please reply to this message describing your issue, and our engineers will get back to you immediately.")
+    bot.reply_to(message, "✅ *Support Ticket Created!* Describe your issue right here and our support staff will contact you.")
 
 @bot.message_handler(commands=['status'])
 def check_status(message):
-    bot.reply_to(message, "All Systems Operational.\\n- Database: Online\\n- Router Core: 0.1ms Latency\\n- API Gateways: Functional")
+    bot.reply_to(message, "🟢 *All Systems Operational*\\n\\n- Database: Operational\\n- Runner Loop: Active\\n- API Gateway: 0.2ms latency")
 
 @bot.message_handler(func=lambda message: True)
 def echo_all(message):
-    bot.reply_to(message, "Support ticket received! Your message has been logged. An agent will contact you shortly.")
+    bot.reply_to(message, "Thank you for your message. It has been securely logged on our server support desk.")
 
 if __name__ == "__main__":
     logger.info("Initializing Continuous Support Long-Polling...")
@@ -248,7 +244,6 @@ import sys
 import logging
 import telebot
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -256,7 +251,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("FeedbackBot")
 
-# Retrieve bot token from Environment
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 if not BOT_TOKEN:
@@ -268,37 +262,71 @@ bot = telebot.TeleBot(BOT_TOKEN, parse_mode="MARKDOWN")
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     welcome_text = (
-        "Welcome to the feedback and Contact Bot!\\n\\n"
-        "Your thoughts are critical to our improvements! Send us any feedback or messages, and we will safely log it for the owner.\\n\\n"
-        "feedback <text> - Register a specific feedback\\n"
-        "about - Find out about this bot"
+        "📮 *Feedback & Contact Hub Bot*\\n\\n"
+        "Your thoughts are highly valuable. Send me any feedback or recommendations.\\n\\n"
+        "• /feedback <text> - Register a feedback ticket\\n"
+        "• /about - Learn about this service"
     )
     bot.reply_to(message, welcome_text)
 
 @bot.message_handler(commands=['about'])
 def send_about(message):
-    bot.reply_to(message, "This is a feedback collector bot running continuous loops on GitHub Actions.")
+    bot.reply_to(message, "ℹ️ This bot is hosted on the Multi-Bot continuous 24x7 serverless hosting platform.")
 
 @bot.message_handler(commands=['feedback'])
 def collect_feedback(message):
     args = message.text.split()
     if len(args) < 2:
-        bot.reply_to(message, "Please provide your feedback text. Example: /feedback Great bot!")
+        bot.reply_to(message, "⚠️ Please provide your feedback text. Example: `/feedback Great interface!`")
         return
     feedback_text = " ".join(args[1:])
-    bot.reply_to(message, f"Feedback Logged!\\n\\n{feedback_text}\\n\\nThank you for helping us grow!")
+    bot.reply_to(message, f"⭐ *Feedback Logged!*\\n\\n_\\"{feedback_text}\\"_\\n\\nThank you for helping us grow!")
 
 @bot.message_handler(func=lambda message: True)
 def log_text(message):
-    bot.reply_to(message, "Message recorded. If you want to log it as formal feedback, please use /feedback <your message>!")
+    bot.reply_to(message, "I recorded that message. To log it as a structured feedback, please use `/feedback <your message>`.")
 
 if __name__ == "__main__":
     logger.info("Initializing Continuous Feedback Long-Polling...")
     bot.infinity_polling(timeout=60, long_polling_timeout=30)
 """
 
+STARTER_BOT_PY = """import os
+import sys
+import logging
+import telebot
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger("StarterBot")
+
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+if not BOT_TOKEN:
+    logger.error("CRITICAL: BOT_TOKEN environment variable not set. Exiting.")
+    sys.exit(1)
+
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="MARKDOWN")
+
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    bot.reply_to(message, "✨ *Welcome to your Custom Starter Bot!*\\n\\nI'm running 24x7 on our multi-bot Actions daemon loop.")
+
+@bot.message_handler(func=lambda message: True)
+def echo_all(message):
+    bot.reply_to(message, f"🤖 *Echo:* {message.text}")
+
+if __name__ == "__main__":
+    logger.info("Initializing Continuous Custom Long-Polling...")
+    bot.infinity_polling(timeout=60, long_polling_timeout=30)
+"""
+
 class LaunchRequest(BaseModel):
     repo_name: str
+    bot_name: str
     bot_token: str
     script_name: str
     github_token: Optional[str] = None
@@ -313,7 +341,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Bot Hoster — Import & Deploy</title>
+    <title>Multi-Bot Daemon Engine — Import & Deploy</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -405,7 +433,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             </h1>
 
             <p class="text-slate-400 text-sm sm:text-base max-w-xl mx-auto mb-10 leading-relaxed">
-                Connect your GitHub account to instantly import and deploy interactive Telegram bots. Powered by continuous Actions container orchestration.
+                Connect your GitHub account to instantly import and deploy interactive Telegram bots. Powered by secure repository secrets and continuous Actions container orchestration.
             </p>
 
             <button onclick="handleConnectGitHub()" class="px-8 py-4 bg-white hover:bg-slate-100 text-slate-950 font-bold rounded-xl text-sm tracking-wide transition-all duration-200 inline-flex items-center gap-3 cursor-pointer shadow-lg hover:scale-[1.02] active:scale-[0.98]">
@@ -420,30 +448,65 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15H15M15 15h6v-6"/></svg>
                     </div>
                     <h3 class="text-sm font-semibold text-white mb-2 font-mono uppercase tracking-wider">Endless Auto-Recycling</h3>
-                    <p class="text-xs text-slate-400 leading-relaxed">Workflows auto-dispatch every 5.5 hours, bypassing standard limits to keep your agents live indefinitely.</p>
+                    <p class="text-xs text-slate-400 leading-relaxed">Workflows auto-dispatch every 5.5 hours, bypassing standard runner limits to keep your agents live indefinitely.</p>
                 </div>
                 <div class="bg-cyber-card border border-slate-800/80 rounded-2xl p-6 hover:border-slate-700/60 transition-all">
                     <div class="w-10 h-10 rounded-xl bg-[#A855F7]/10 border border-[#A855F7]/20 flex items-center justify-center text-[#A855F7] mb-4">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                     </div>
                     <h3 class="text-sm font-semibold text-white mb-2 font-mono uppercase tracking-wider">Zero Config Launch</h3>
-                    <p class="text-xs text-slate-400 leading-relaxed">No local hosting required. The platform generates code, handles dependencies, and provisions runners.</p>
+                    <p class="text-xs text-slate-400 leading-relaxed">No local server needed. The platform generates code, handles secrets encryption via PyNaCl, and configures runner environments.</p>
                 </div>
                 <div class="bg-cyber-card border border-slate-800/80 rounded-2xl p-6 hover:border-slate-700/60 transition-all">
                     <div class="w-10 h-10 rounded-xl bg-[#22C55E]/10 border border-[#22C55E]/20 flex items-center justify-center text-[#22C55E] mb-4">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                     </div>
-                    <h3 class="text-sm font-semibold text-white mb-2 font-mono uppercase tracking-wider">Secure Token Handling</h3>
-                    <p class="text-xs text-slate-400 leading-relaxed">Tokens and API secrets are securely passed directly into GitHub Action environment variables, ensuring privacy.</p>
+                    <h3 class="text-sm font-semibold text-white mb-2 font-mono uppercase tracking-wider">Secure Token Secrets</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Your tokens are securely sealed using standard public-key cryptography and stored inside repository secrets under 'TELEGRAM_BOT_TOKEN'.</p>
                 </div>
             </div>
         </div>
 
-        <!-- 2. AUTHENTICATED STATE — STEP 1: REPOSITORY IMPORT LIST -->
+        <!-- 2. AUTHENTICATED STATE: DASHBOARD VIEW (ACTIVE PROJECTS & CREATE BUTTON) -->
+        <div id="state-authenticated-dashboard" class="hidden space-y-8">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-slate-800/50">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">Your Daemon Projects</h1>
+                    <p class="text-xs sm:text-sm text-slate-400 mt-1">Deploy, orchestrate, and trace active continuous workflow executions.</p>
+                </div>
+                <button onclick="goToImportRepo()" class="px-5 py-3 bg-cyber-accent text-slate-950 font-bold rounded-xl text-xs tracking-wider uppercase glow-button hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer inline-flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    Create New Project
+                </button>
+            </div>
+
+            <!-- Projects Grid -->
+            <div id="projects-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Dynamically populated project cards -->
+            </div>
+
+            <!-- Empty Projects State -->
+            <div id="projects-empty-state" class="hidden bg-cyber-card border border-slate-800 rounded-2xl p-12 text-center">
+                <div class="w-12 h-12 rounded-xl bg-cyber-accent/10 border border-cyber-accent/20 flex items-center justify-center text-cyber-accent mx-auto mb-4">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+                </div>
+                <h3 class="text-base font-bold text-white mb-1">No Active Projects</h3>
+                <p class="text-xs text-slate-400 max-w-sm mx-auto mb-6">Create a project to commit continuous daemon workflows and monitor console logs live.</p>
+                <button onclick="goToImportRepo()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-white font-mono font-bold rounded-lg uppercase cursor-pointer transition-all">Import Repository</button>
+            </div>
+        </div>
+
+        <!-- 3. CREATE NEW PROJECT: REPOSITORY IMPORT LIST -->
         <div id="state-step1-repos" class="hidden">
+            <!-- Back navigation button -->
+            <button onclick="goToDashboard()" class="mb-6 text-xs text-slate-400 hover:text-white transition-all inline-flex items-center gap-2 font-mono uppercase font-bold cursor-pointer">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                Back to Projects
+            </button>
+
             <div class="mb-8">
-                <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-1.5">Import Git Repository</h2>
-                <p class="text-xs sm:text-sm text-slate-400">Select a GitHub repository to inject bot workflows and deploy.</p>
+                <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-1.5">Import Repository</h2>
+                <p class="text-xs sm:text-sm text-slate-400">Select a GitHub repository to inject secure workflow parameters and deploy.</p>
             </div>
 
             <!-- Repo Search Bar -->
@@ -457,48 +520,59 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             <!-- Repository Scrollable Container -->
             <div class="bg-cyber-card border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
                 <div id="repos-container" class="max-h-[380px] overflow-y-auto scroll-custom divide-y divide-slate-800/60">
-                    <!-- Loading Skeletons by default -->
-                    <div class="p-6 text-center text-slate-500 font-mono text-sm flex flex-col items-center justify-center gap-3">
-                        <div class="w-6 h-6 border-2 border-t-transparent border-cyber-accent rounded-full animate-spin"></div>
-                        Fetching repositories from GitHub...
-                    </div>
+                    <!-- Skeletons fetched asynchronously -->
                 </div>
             </div>
         </div>
 
-        <!-- 3. CONFIGURATION PANEL — STEP 2 -->
+        <!-- 4. CONFIGURATION PANEL — STEP 2 -->
         <div id="state-step2-config" class="hidden">
             <!-- Back navigation button -->
-            <button onclick="goToStep1()" class="mb-6 text-xs text-slate-400 hover:text-white transition-all inline-flex items-center gap-2 font-mono uppercase font-bold cursor-pointer">
+            <button onclick="goToImportRepo()" class="mb-6 text-xs text-slate-400 hover:text-white transition-all inline-flex items-center gap-2 font-mono uppercase font-bold cursor-pointer">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                 Back to Repositories
             </button>
 
             <div class="mb-8">
-                <span class="text-[10px] font-mono tracking-widest text-cyber-accent uppercase font-bold bg-cyber-accent/10 px-2.5 py-1 rounded border border-cyber-accent/15">Configuration</span>
+                <span class="text-[10px] font-mono tracking-widest text-cyber-accent uppercase font-bold bg-cyber-accent/10 px-2.5 py-1 rounded border border-cyber-accent/15">Configure Settings</span>
                 <h2 id="selected-repo-title" class="text-xl sm:text-2xl font-extrabold tracking-tight text-white mt-4 font-mono truncate">owner / repo-name</h2>
-                <p class="text-xs text-slate-400 mt-1">Configure environment tokens and select bot engine template below.</p>
+                <p class="text-xs text-slate-400 mt-1">Customize variables and provide credentials securely before launching.</p>
             </div>
 
             <!-- Main Config Form -->
             <div class="bg-cyber-card border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+                
+                <!-- Project Name -->
+                <div>
+                    <label class="block text-xs font-mono text-slate-300 font-semibold tracking-wider uppercase mb-1.5">Project / Bot Name</label>
+                    <input type="text" id="project-name-input" placeholder="My Telegram Bot" class="w-full bg-cyber-bg border border-slate-800 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-cyber-accent focus:ring-1 focus:ring-cyber-accent font-sans">
+                </div>
+
                 <!-- Token input -->
                 <div>
                     <label class="block text-xs font-mono text-slate-300 font-semibold tracking-wider uppercase mb-1.5">Telegram Bot Token</label>
                     <input type="password" id="bot-token-input" placeholder="123456789:ABCdef_GhIjkLmNoPqRs" class="w-full bg-cyber-bg border border-slate-800 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-cyber-accent focus:ring-1 focus:ring-cyber-accent font-mono">
                     <p class="text-[10px] text-slate-500 mt-1.5 font-sans leading-relaxed">
-                        Generated by <a href="https://t.me/BotFather" target="_blank" class="text-cyber-accent hover:underline font-mono">@BotFather</a> on Telegram. This secret will be handled securely and injected into your repo secrets.
+                        Generated by <a href="https://t.me/BotFather" target="_blank" class="text-cyber-accent hover:underline font-mono">@BotFather</a>. This token is securely encrypted using Libsodium and saved directly to your repository's actions secrets.
                     </p>
                 </div>
 
                 <!-- Script selection -->
-                <div>
-                    <label class="block text-xs font-mono text-slate-300 font-semibold tracking-wider uppercase mb-1.5">Select Bot Runner Script</label>
-                    <select id="bot-script-select" class="w-full bg-cyber-bg border border-slate-800 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-cyber-accent focus:ring-1 focus:ring-cyber-accent font-mono">
-                        <option value="movie_bot.py">movie_bot.py — Cinematic Library & Information Bot</option>
-                        <option value="management_bot.py">management_bot.py — Support Ticket Registry & Ops Bot</option>
-                        <option value="custom_mod_bot.py">custom_mod_bot.py — Moderation & Secure Feedback Bot</option>
-                    </select>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-mono text-slate-300 font-semibold tracking-wider uppercase mb-1.5">Bot Script Template</label>
+                        <select id="bot-script-select" onchange="toggleCustomScriptInput()" class="w-full bg-cyber-bg border border-slate-800 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-cyber-accent focus:ring-1 focus:ring-cyber-accent font-mono">
+                            <option value="movie_bot.py">Movie Library Suggestion Bot</option>
+                            <option value="support_bot.py">Customer Support Ticket Desk Bot</option>
+                            <option value="feedback_bot.py">Secure Feedback & Contact Bot</option>
+                            <option value="starter_bot.py">Minimal Python Echo Starter Bot</option>
+                            <option value="custom">-- Custom Filename --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-mono text-slate-300 font-semibold tracking-wider uppercase mb-1.5">Script Path/Filename</label>
+                        <input type="text" id="script-filename-input" value="bot.py" class="w-full bg-cyber-bg border border-slate-800 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-cyber-accent focus:ring-1 focus:ring-cyber-accent font-mono">
+                    </div>
                 </div>
 
                 <div class="pt-4 border-t border-slate-800/60">
@@ -510,12 +584,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- 4. LOGS AND PIPELINE TERMINAL STATE — STEP 3 -->
+        <!-- 5. DEPLOYMENT PIPELINE RUNNING TERMINAL STATE — STEP 3 -->
         <div id="state-step3-terminal" class="hidden">
             <div class="mb-6">
                 <span class="text-[10px] font-mono tracking-widest text-[#22C55E] uppercase font-bold bg-[#22C55E]/10 px-2.5 py-1 rounded border border-[#22C55E]/15 animate-pulse">DEPLOYING PIPELINE</span>
                 <h2 id="pipeline-repo-title" class="text-xl sm:text-2xl font-extrabold tracking-tight text-white mt-4 font-mono">owner / repo-name</h2>
-                <p id="pipeline-subtitle" class="text-xs text-slate-400 mt-1">Deploying multi-bot daemon to GitHub runner...</p>
+                <p id="pipeline-subtitle" class="text-xs text-slate-400 mt-1">Encrypting secrets and provisioning GitHub Actions container...</p>
             </div>
 
             <!-- Terminal log box -->
@@ -527,45 +601,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                         <span class="w-3 h-3 rounded-full bg-emerald-500/80"></span>
                         <span class="text-[11px] text-slate-400 font-mono ml-1">deployment-logs.sh</span>
                     </div>
-                    <div class="text-[10px] text-cyber-accent animate-pulse font-semibold uppercase">Live Loop</div>
+                    <div class="text-[10px] text-cyber-accent animate-pulse font-semibold uppercase">Provisioning</div>
                 </div>
                 <div id="terminal-logs-body" class="p-5 h-64 overflow-y-auto scroll-custom space-y-2 text-slate-300 leading-relaxed">
                     <!-- Logs stream in dynamically -->
-                </div>
-            </div>
-
-            <!-- Real Post-Deployment Success Card -->
-            <div id="success-card" class="hidden mt-8 bg-gradient-to-b from-[#10B981]/10 to-[#10B981]/2 border border-[#10B981]/20 rounded-2xl p-6 sm:p-8 text-center space-y-5">
-                <div class="w-14 h-14 rounded-full bg-[#10B981]/15 border border-[#10B981]/30 mx-auto flex items-center justify-center text-[#10B981]">
-                    <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                </div>
-
-                <div>
-                    <h3 class="text-lg sm:text-xl font-bold text-white font-mono">Deployment Completed</h3>
-                    <p class="text-xs text-slate-400 mt-1">Your Telegram Bot daemon has launched with continuous workflow cycling.</p>
-                </div>
-
-                <div class="max-w-md mx-auto p-4 bg-black/40 rounded-xl border border-slate-800/50 space-y-2 text-left font-mono text-xs">
-                    <div class="flex justify-between"><span class="text-slate-500">REPOSITORY:</span><span class="text-white" id="success-repo-name">owner/repo</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500">RUNNER STATUS:</span><span class="text-[#10B981] font-semibold flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-ping"></span>24X7 LOOP ACTIVE</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500">SCRIPT ENGINE:</span><span class="text-cyber-accent" id="success-script-name">movie_bot.py</span></div>
-                </div>
-
-                <div class="flex flex-col sm:flex-row gap-3 max-w-md mx-auto pt-2">
-                    <a id="bot-telegram-link" href="#" target="_blank" class="flex-1 py-3 bg-[#10B981] hover:bg-[#10B981]/90 text-slate-950 font-bold text-xs rounded-xl transition-all uppercase tracking-wider flex items-center justify-center gap-1.5">
-                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.56 8.16l-1.92 9.12c-.14.65-.53.81-1.08.5l-2.93-2.16-1.41 1.36c-.16.16-.29.29-.6.29l.21-2.98 5.43-4.9c.24-.21-.05-.33-.37-.11L10.13 13.1l-2.89-.9c-.63-.2-.64-.63.13-.93l11.27-4.34c.52-.19.98.12.82.72z"/></svg>
-                        Open Telegram Bot
-                    </a>
-                    <button onclick="stopActiveBot()" class="py-3 px-5 border border-rose-500/30 hover:border-rose-500/50 bg-rose-500/5 hover:bg-rose-500/10 text-rose-400 font-bold text-xs rounded-xl transition-all uppercase tracking-wider cursor-pointer">
-                        Stop Runner
-                    </button>
-                </div>
-
-                <div class="pt-4 border-t border-slate-800/40">
-                    <button onclick="goToStep1()" class="text-xs text-slate-400 hover:text-white transition-all font-mono font-bold uppercase cursor-pointer flex items-center gap-1 mx-auto">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                        Deploy Another Bot
-                    </button>
                 </div>
             </div>
         </div>
@@ -574,7 +613,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
     <!-- Footer Area -->
     <footer class="border-t border-slate-900/80 bg-cyber-bg/40 py-5 text-center font-mono text-[10px] text-slate-600 relative z-10">
-        DAEMON ORCHESTRATION ENGINE • BUILT IDENTICAL TO VERCEL • SECURED DIRECTLY VIA REPOSITORY DISPATCH
+        DAEMON ORCHESTRATION ENGINE • SECURED VIA REPOSITORY DISPATCH
     </footer>
 
     <!-- Client-Side Dashboard Javascript Controller -->
@@ -582,7 +621,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         let githubToken = "";
         let repositoriesList = [];
         let selectedRepository = null;
-        let deploymentLogIndex = 0;
+        let activeProjects = [];
+        let pollingIntervals = {};
 
         // On DOM Content Loaded
         document.addEventListener('DOMContentLoaded', () => {
@@ -591,11 +631,19 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
         // Initialize session and authentication status
         function initSession() {
+            // Load saved projects from localStorage
+            try {
+                const saved = localStorage.getItem('multi_bot_active_projects');
+                if (saved) activeProjects = JSON.parse(saved);
+            } catch(e) {
+                console.error("Failed to read active projects:", e);
+            }
+
             const urlParams = new URLSearchParams(window.location.search);
             let token = urlParams.get('token');
             if (token) {
                 localStorage.setItem('github_token', token);
-                // Clean the token parameter from URL to maintain premium aesthetic
+                document.cookie = "gh_token=" + token + "; max-age=31536000; path=/; SameSite=Lax; Secure";
                 window.history.replaceState({}, document.title, window.location.pathname);
             } else {
                 token = localStorage.getItem('github_token');
@@ -603,7 +651,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
             // Fallback: check cookie as well
             if (!token) {
-                const cookieMatch = document.cookie.match(new RegExp('(^| )github_token=([^;]+)'));
+                const cookieMatch = document.cookie.match(new RegExp('(^| )gh_token=([^;]+)'));
                 if (cookieMatch) {
                     token = cookieMatch[2];
                     localStorage.setItem('github_token', token);
@@ -621,6 +669,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         // Show Landing / Login screen
         function showLogin() {
             document.getElementById('state-unauthenticated').classList.remove('hidden');
+            document.getElementById('state-authenticated-dashboard').classList.add('hidden');
             document.getElementById('state-step1-repos').classList.add('hidden');
             document.getElementById('state-step2-config').classList.add('hidden');
             document.getElementById('state-step3-terminal').classList.add('hidden');
@@ -637,7 +686,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         // Show main Dashboard and retrieve list of real repositories
         function showDashboard() {
             document.getElementById('state-unauthenticated').classList.add('hidden');
-            document.getElementById('state-step1-repos').classList.remove('hidden');
+            document.getElementById('state-authenticated-dashboard').classList.remove('hidden');
+            document.getElementById('state-step1-repos').classList.add('hidden');
             document.getElementById('state-step2-config').classList.add('hidden');
             document.getElementById('state-step3-terminal').classList.add('hidden');
 
@@ -654,16 +704,203 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 </div>
             `;
 
-            fetchRepositories();
+            renderProjectsList();
         }
 
         // Log out clean
         function handleLogout() {
+            // Stop any polling logs
+            Object.values(pollingIntervals).forEach(clearInterval);
+            pollingIntervals = {};
+
             localStorage.removeItem('github_token');
-            // Clear cookie
-            document.cookie = "github_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            document.cookie = "gh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
             githubToken = "";
             showLogin();
+        }
+
+        // Go to dashboard
+        function goToDashboard() {
+            // Clean active logs loops
+            Object.values(pollingIntervals).forEach(clearInterval);
+            pollingIntervals = {};
+            showDashboard();
+        }
+
+        // Transition to repository import list
+        function goToImportRepo() {
+            document.getElementById('state-authenticated-dashboard').classList.add('hidden');
+            document.getElementById('state-step1-repos').classList.remove('hidden');
+            document.getElementById('state-step2-config').classList.add('hidden');
+            document.getElementById('state-step3-terminal').classList.add('hidden');
+            fetchRepositories();
+        }
+
+        // Render Local project list
+        function renderProjectsList() {
+            const grid = document.getElementById('projects-grid');
+            const emptyState = document.getElementById('projects-empty-state');
+
+            if (activeProjects.length === 0) {
+                grid.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            grid.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+
+            grid.innerHTML = activeProjects.map((project, idx) => `
+                <div class="bg-cyber-card border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700/80 transition-all flex flex-col justify-between">
+                    <div class="p-5 sm:p-6">
+                        <div class="flex items-center justify-between gap-3 mb-4">
+                            <div class="min-w-0">
+                                <h3 class="text-sm font-extrabold text-white font-mono uppercase tracking-wider truncate">${project.name}</h3>
+                                <a href="https://github.com/${project.repo_name}" target="_blank" class="text-xs text-slate-500 hover:text-cyber-accent font-mono transition-all inline-flex items-center gap-1 mt-0.5">
+                                    ${project.repo_name}
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
+                                </a>
+                            </div>
+                            <span class="text-[10px] font-mono tracking-wider px-2 py-0.5 rounded border border-[#10B981]/20 bg-[#10B981]/5 text-[#10B981] flex items-center gap-1 shrink-0">
+                                <span class="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse"></span>
+                                LIVE
+                            </span>
+                        </div>
+
+                        <div class="space-y-2 bg-black/30 border border-slate-900/50 rounded-xl p-3.5 font-mono text-xs">
+                            <div class="flex justify-between"><span class="text-slate-500">SCRIPT ENGINE:</span><span class="text-cyber-accent font-bold">${project.script_name}</span></div>
+                            <div class="flex justify-between"><span class="text-slate-500">BOT USERNAME:</span><span class="text-slate-300">@${project.bot_username || 'Pending'}</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Actions Bar -->
+                    <div class="px-5 py-4 border-t border-slate-800/60 bg-slate-900/10 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <a href="https://t.me/${project.bot_username}" target="_blank" class="px-3 py-1.5 bg-[#10B981] hover:bg-[#10B981]/90 text-slate-950 font-extrabold text-[11px] rounded-lg transition-all uppercase tracking-wider inline-flex items-center gap-1 shadow-sm">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.56 8.16l-1.92 9.12c-.14.65-.53.81-1.08.5l-2.93-2.16-1.41 1.36c-.16.16-.29.29-.6.29l.21-2.98 5.43-4.9c.24-.21-.05-.33-.37-.11L10.13 13.1l-2.89-.9c-.63-.2-.64-.63.13-.93l11.27-4.34c.52-.19.98.12.82.72z"/></svg>
+                                Telegram
+                            </a>
+                            <button onclick="toggleLogs(${idx}, '${project.repo_name}')" class="px-3 py-1.5 border border-slate-800 hover:border-slate-700 bg-black/20 text-slate-300 font-bold font-mono text-[11px] rounded-lg transition-all uppercase tracking-wider cursor-pointer">
+                                Runtime Logs
+                            </button>
+                        </div>
+                        <button onclick="stopProject(${idx})" class="text-rose-500 hover:text-rose-400 font-mono text-[11px] font-bold uppercase transition-all cursor-pointer">
+                            Remove
+                        </button>
+                    </div>
+
+                    <!-- Collapsible live logs section -->
+                    <div id="logs-container-${idx}" class="hidden border-t border-slate-800/80 bg-black/90 font-mono text-[11px]">
+                        <div class="px-5 py-2.5 border-b border-slate-900 bg-slate-950/80 flex items-center justify-between text-slate-400">
+                            <span>RUNNING TERMINAL</span>
+                            <span class="flex items-center gap-1.5 text-cyber-accent text-[9px] font-semibold tracking-widest animate-pulse">
+                                <span class="w-1.5 h-1.5 rounded-full bg-cyber-accent animate-ping"></span>
+                                POLLING LIVE 5S
+                            </span>
+                        </div>
+                        <div id="logs-terminal-body-${idx}" class="p-4 h-56 overflow-y-auto scroll-custom space-y-1.5 text-slate-300 leading-normal">
+                            Loading runner logs stream...
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Toggle Live Log views
+        function toggleLogs(idx, repoName) {
+            const container = document.getElementById(`logs-container-${idx}`);
+            const body = document.getElementById(`logs-terminal-body-${idx}`);
+
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                body.innerHTML = `<div class="text-slate-500 animate-pulse font-mono">Syncing active workflow logs from GitHub runner...</div>`;
+                fetchRuntimeLogs(idx, repoName);
+                
+                // Clear any existing poll
+                if (pollingIntervals[idx]) clearInterval(pollingIntervals[idx]);
+                // Set 5s log poll
+                pollingIntervals[idx] = setInterval(() => {
+                    fetchRuntimeLogs(idx, repoName);
+                }, 5000);
+            } else {
+                container.classList.add('hidden');
+                if (pollingIntervals[idx]) {
+                    clearInterval(pollingIntervals[idx]);
+                    delete pollingIntervals[idx];
+                }
+            }
+        }
+
+        // Fetch logs asynchronously
+        async function fetchRuntimeLogs(idx, repoName) {
+            const body = document.getElementById(`logs-terminal-body-${idx}`);
+            try {
+                const res = await fetch(`/api/logs?repo=${encodeURIComponent(repoName)}&token=${encodeURIComponent(githubToken)}`);
+                if (!res.ok) {
+                    throw new Error("Failed to trace logs");
+                }
+                const data = await res.json();
+                
+                let content = "";
+                if (data.status) {
+                    content += `<div class="text-cyber-accent border-b border-slate-900/60 pb-1.5 mb-2 font-semibold">CONTAINER RUN: #${data.job_name || 'Workflow'} [${data.status.toUpperCase()}]</div>`;
+                }
+
+                // Render console logs cleanly
+                if (data.logs) {
+                    const cleanLogs = data.logs
+                        .replace(/\\r\\n/g, '\\n')
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;");
+                    content += `<pre class="whitespace-pre-wrap font-mono text-slate-300 leading-relaxed">${cleanLogs}</pre>`;
+                } else {
+                    content += `<div class="text-slate-500">Daemon is in queued status. Initializing runner container...</div>`;
+                }
+                
+                body.innerHTML = content;
+                body.scrollTop = body.scrollHeight;
+            } catch(err) {
+                body.innerHTML = `<div class="text-rose-400 font-semibold font-mono">Connection trace to runner timed out. Verify repository token actions secrets configuration.</div>`;
+            }
+        }
+
+        // Remove Project locally (or invoke cancel on runner if requested)
+        async function stopProject(idx) {
+            const project = activeProjects[idx];
+            if (!confirm(`Are you sure you want to stop the workflow loop and remove Project '${project.name}' from your dashboard?`)) {
+                return;
+            }
+
+            // Stop any log poll
+            if (pollingIntervals[idx]) {
+                clearInterval(pollingIntervals[idx]);
+                delete pollingIntervals[idx];
+            }
+
+            try {
+                // Inform user we are cancelling workflows on GitHub too
+                const res = await fetch('/api/stop', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        repo_name: project.repo_name,
+                        github_token: githubToken
+                    })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(data.message || "Active workflows terminated clean.");
+                }
+            } catch(e) {
+                console.warn("Failed to stop github actions run directly:", e);
+            }
+
+            // Remove from array and update state
+            activeProjects.splice(idx, 1);
+            localStorage.setItem('multi_bot_active_projects', JSON.stringify(activeProjects));
+            renderProjectsList();
         }
 
         // Fetch repositories via FastAPI endpoint asynchronously
@@ -672,7 +909,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             container.innerHTML = `
                 <div class="p-12 text-center text-slate-500 font-mono text-sm flex flex-col items-center justify-center gap-3">
                     <div class="w-6 h-6 border-2 border-t-transparent border-cyber-accent rounded-full animate-spin"></div>
-                    Loading active GitHub repositories...
+                    Fetching active GitHub repositories...
                 </div>
             `;
 
@@ -758,34 +995,53 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             document.getElementById('state-step2-config').classList.remove('hidden');
 
             document.getElementById('selected-repo-title').textContent = repo.full_name;
+            
+            // Prefill Project Name with Repo Name
+            document.getElementById('project-name-input').value = repo.name.replace(/[-_]/g, ' ').toUpperCase();
             document.getElementById('bot-token-input').value = "";
+            document.getElementById('bot-script-select').value = "movie_bot.py";
+            
+            toggleCustomScriptInput();
         }
 
-        // Go back to STEP 1
-        function goToStep1() {
-            document.getElementById('state-step2-config').classList.add('hidden');
-            document.getElementById('state-step3-terminal').classList.add('hidden');
-            document.getElementById('state-step1-repos').classList.remove('hidden');
-            selectedRepository = null;
+        // Toggle custom script inputs
+        function toggleCustomScriptInput() {
+            const selector = document.getElementById('bot-script-select');
+            const fileInput = document.getElementById('script-filename-input');
+            
+            if (selector.value === "custom") {
+                fileInput.value = "main.py";
+                fileInput.disabled = false;
+                fileInput.classList.remove('opacity-50');
+            } else {
+                fileInput.value = selector.value;
+                fileInput.disabled = true;
+                fileInput.classList.add('opacity-50');
+            }
         }
 
         // Trigger active deployment pipeline
         async function handleDeployAndGoLive() {
+            const projectName = document.getElementById('project-name-input').value.trim() || selectedRepository.name;
             const botToken = document.getElementById('bot-token-input').value.trim();
-            const scriptName = document.getElementById('bot-script-select').value;
+            const scriptSelectVal = document.getElementById('bot-script-select').value;
+            const scriptName = document.getElementById('script-filename-input').value.trim();
 
             if (!botToken) {
                 alert("Please enter a valid Telegram Bot Token first!");
+                return;
+            }
+            if (!scriptName) {
+                alert("Please specify a valid script file name (e.g. main.py)!");
                 return;
             }
 
             // Move to Step 3 layout immediately
             document.getElementById('state-step2-config').classList.add('hidden');
             document.getElementById('state-step3-terminal').classList.remove('hidden');
-            document.getElementById('success-card').classList.add('hidden');
 
             document.getElementById('pipeline-repo-title').textContent = selectedRepository.full_name;
-            document.getElementById('pipeline-subtitle').textContent = `Spawning continuous bot engine pipeline for: ${scriptName}`;
+            document.getElementById('pipeline-subtitle').textContent = `Spawning continuous workflow pipeline for script: ${scriptName}`;
 
             const terminalLogs = document.getElementById('terminal-logs-body');
             terminalLogs.innerHTML = "";
@@ -812,6 +1068,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     },
                     body: JSON.stringify({
                         repo_name: selectedRepository.full_name,
+                        bot_name: projectName,
                         bot_token: botToken,
                         script_name: scriptName,
                         github_token: githubToken
@@ -824,30 +1081,43 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     throw new Error(data.detail || "Automated deployment failed");
                 }
 
-                log(`Success! Verified bot identity: <span class="text-cyber-accent font-bold">@${data.username}</span>`);
+                log(`Success! Verified Telegram bot identity: <span class="text-cyber-accent font-bold">@${data.username}</span>`);
                 await sleep(700);
-                log(`Synchronizing with GitHub Content APIs...`);
+                log(`Synchronizing and checking with GitHub action runner environment...`);
                 await sleep(500);
-                log(`Creating workflow folder and runner definition: <span class="text-slate-100 font-mono text-[11px] bg-slate-900 px-1 py-0.5 rounded">.github/workflows/run_bot.yml</span>`);
+                log(`Encrypting Bot Token using <span class="text-[#A855F7]">PyNaCl Libsodium Sealed Box</span>...`);
                 await sleep(600);
-                log(`Committing optimized script template: <span class="text-slate-100 font-mono text-[11px] bg-slate-900 px-1 py-0.5 rounded">templates/${data.bot_type}.py</span>`);
+                log(`Setting up Repository Actions Secret: <span class="text-slate-100 bg-slate-900 px-1 py-0.5 rounded font-mono">TELEGRAM_BOT_TOKEN</span>...`);
+                await sleep(750);
+                log(`Committing loop-runner workflow: <span class="text-slate-100 font-mono text-[11px] bg-slate-900 px-1 py-0.5 rounded">.github/workflows/run_bot.yml</span>`);
+                await sleep(600);
+                log(`Committing optimized script engine template: <span class="text-slate-100 font-mono text-[11px] bg-slate-900 px-1 py-0.5 rounded">${data.bot_type}</span>`);
                 await sleep(650);
-                log(`Invoking Repository Dispatches API to launch 24x7 runner pipeline...`);
+                log(`Dispatching repository trigger event to initiate runner loop container...`);
                 await sleep(800);
                 log(`Continuous loop orchestrator activated! Deployment completed successfully!`, false, true);
 
-                // Prepare success card
-                document.getElementById('success-repo-name').textContent = selectedRepository.full_name;
-                document.getElementById('success-script-name').textContent = `${data.bot_type}.py`;
-                document.getElementById('bot-telegram-link').href = `https://t.me/${data.username}`;
+                // Add to active projects array
+                const newProject = {
+                    name: projectName,
+                    repo_name: selectedRepository.full_name,
+                    script_name: data.bot_type,
+                    bot_username: data.username
+                };
                 
-                // Show success card
-                await sleep(300);
-                document.getElementById('success-card').classList.remove('hidden');
+                // Avoid duplicates
+                activeProjects = activeProjects.filter(p => p.repo_name !== newProject.repo_name);
+                activeProjects.unshift(newProject);
+                
+                // Save to localStorage
+                localStorage.setItem('multi_bot_active_projects', JSON.stringify(activeProjects));
+
+                await sleep(1500);
+                goToDashboard();
 
             } catch (error) {
                 log(`CRITICAL ERROR: ${error.message}`, true);
-                log(`Deployment workflow terminated due to pipeline failure. Please verify your token and repository permissions.`, true);
+                log(`Deployment workflow terminated due to pipeline failure. Please verify your token and repository settings.`, true);
                 
                 // Display retry action button after log failure
                 const retryBtn = document.createElement('button');
@@ -859,46 +1129,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 };
                 terminalLogs.appendChild(retryBtn);
                 terminalLogs.scrollTop = terminalLogs.scrollHeight;
-            }
-        }
-
-        // Cancel / stop bot pipeline execution
-        async function stopActiveBot() {
-            if (!confirm("Are you sure you want to stop all active background workflow runs for this bot in this repository?")) {
-                return;
-            }
-
-            const successCard = document.getElementById('success-card');
-            const originalHTML = successCard.innerHTML;
-            successCard.innerHTML = `
-                <div class="p-6 text-center text-slate-400 font-mono text-sm flex flex-col items-center justify-center gap-3">
-                    <div class="w-6 h-6 border-2 border-t-transparent border-rose-500 rounded-full animate-spin"></div>
-                    Cancelling active GitHub workflow runs...
-                </div>
-            `;
-
-            try {
-                const response = await fetch('/api/stop', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        repo_name: selectedRepository.full_name,
-                        github_token: githubToken
-                    })
-                });
-
-                if (!response.ok) {
-                    const data = await response.json();
-                    throw new Error(data.detail || "Failed to cancel pipeline runs");
-                }
-
-                alert("All active workflow runs have been successfully stopped.");
-                goToStep1();
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-                successCard.innerHTML = originalHTML;
             }
         }
 
@@ -917,18 +1147,18 @@ def get_redirect_uri(request: Request) -> str:
     if host:
         scheme = "https" if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https" else "http"
         return f"{scheme}://{host}/api/callback"
-    return REDIRECT_URI
+    return "https://multi-bot-hosting-platform.vercel.app/api/callback"
 
 GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET")
-REDIRECT_URI = "https://multi-bot-hosting-platform.vercel.app/api/callback"
 
 if not GITHUB_CLIENT_ID:
-    logger.warning("GITHUB_CLIENT_ID environment variable is missing!")
+    logger.warning("GITHUB_CLIENT_ID environment variable is missing under AI Studio settings.")
 if not GITHUB_CLIENT_SECRET:
-    logger.warning("GITHUB_CLIENT_SECRET environment variable is missing!")
+    logger.warning("GITHUB_CLIENT_SECRET environment variable is missing under AI Studio settings.")
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/api", response_class=HTMLResponse)
 async def root(request: Request):
     return HTMLResponse(content=DASHBOARD_HTML)
 
@@ -947,7 +1177,7 @@ async def login(request: Request):
     if not GITHUB_CLIENT_ID:
         raise HTTPException(
             status_code=400,
-            detail="GitHub OAuth is not configured on the server. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables under the Settings menu in AI Studio."
+            detail="GitHub OAuth GITHUB_CLIENT_ID configuration is missing under AI Studio settings."
         )
 
     dynamic_redirect = get_redirect_uri(request)
@@ -967,7 +1197,7 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
             <style>
                 body {
                     font-family: 'Inter', -apple-system, sans-serif;
-                    background-color: #020617;
+                    background-color: #030712;
                     color: #EF4444;
                     display: flex;
                     align-items: center;
@@ -978,7 +1208,7 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
                 .card {
                     text-align: center;
                     padding: 2.5rem;
-                    background: #0F172A;
+                    background: #0B111E;
                     border: 1px solid rgba(239, 68, 68, 0.2);
                     border-radius: 1rem;
                     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
@@ -1025,7 +1255,7 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
         <style>
             body {{
                 font-family: 'Inter', -apple-system, sans-serif;
-                background-color: #020617;
+                background-color: #030712;
                 color: #F8FAFC;
                 display: flex;
                 flex-direction: column;
@@ -1036,7 +1266,7 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
                 text-align: center;
             }}
             .card {{
-                background-color: #0F172A;
+                background-color: #0B111E;
                 border: 1px solid #1E293B;
                 padding: 2.5rem;
                 border-radius: 1.25rem;
@@ -1083,7 +1313,7 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
     response = HTMLResponse(content=html_content)
     if access_token:
         response.set_cookie(
-            key="github_token",
+            key="gh_token",
             value=access_token,
             httponly=False,
             secure=True,
@@ -1094,12 +1324,17 @@ async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
 
 @app.get("/api/repos")
 @app.get("/repos")
-async def get_repositories(token: str = Query(...)):
+async def get_repositories(request: Request, token: Optional[str] = Query(None)):
+    # Retrieve from query parameters or securely stored cookie
+    gh_token = token or request.cookies.get("gh_token") or request.cookies.get("github_token")
+    if not gh_token:
+        raise HTTPException(status_code=401, detail="Unauthorized: GitHub access token is missing.")
+
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             "https://api.github.com/user/repos?per_page=100&sort=updated",
             headers={
-                "Authorization": f"token {token}",
+                "Authorization": f"token {gh_token}",
                 "Accept": "application/vnd.github.v3+json",
                 "User-Agent": "telegram-bot-backend"
             }
@@ -1145,44 +1380,80 @@ async def commit_github_file(client: httpx.AsyncClient, token: str, repo_name: s
         logger.error(f"Failed to commit file {path} to GitHub: {put_resp.text}")
         raise HTTPException(status_code=put_resp.status_code, detail=f"Failed to commit {path}: {put_resp.text}")
 
+async def set_github_secret(client: httpx.AsyncClient, token: str, repo_name: str, secret_name: str, secret_value: str):
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "telegram-bot-backend"
+    }
+    
+    # 1. Get repo public key
+    pk_url = f"https://api.github.com/repos/{repo_name}/actions/secrets/public-key"
+    resp = await client.get(pk_url, headers=headers)
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=resp.status_code, 
+            detail=f"Failed to retrieve GitHub Actions public key for encrypting secrets: {resp.text}"
+        )
+    
+    pk_data = resp.json()
+    key_id = pk_data.get("key_id")
+    public_key_b64 = pk_data.get("key")
+    
+    # 2. Encrypt using PyNaCl
+    try:
+        from nacl import public
+        public_key_bytes = base64.b64decode(public_key_b64)
+        public_key = public.PublicKey(public_key_bytes)
+        sealed_box = public.SealedBox(public_key)
+        encrypted_bytes = sealed_box.encrypt(secret_value.encode("utf-8"))
+        encrypted_value_b64 = base64.b64encode(encrypted_bytes).decode("utf-8")
+    except Exception as e:
+        logger.error(f"PyNaCl Encryption Failed: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to encrypt secret using PyNaCl Sealed Box: {str(e)}"
+        )
+        
+    # 3. PUT the secret to GitHub
+    secret_url = f"https://api.github.com/repos/{repo_name}/actions/secrets/{secret_name}"
+    payload = {
+        "encrypted_value": encrypted_value_b64,
+        "key_id": key_id
+    }
+    
+    put_resp = await client.put(secret_url, headers=headers, json=payload)
+    if put_resp.status_code not in [201, 204]:
+        logger.error(f"Failed to write secret to GitHub: {put_resp.text}")
+        raise HTTPException(status_code=put_resp.status_code, detail=f"Failed to write Actions secret: {put_resp.text}")
+
 @app.post("/api/launch")
 @app.post("/launch")
-async def launch_bot(payload: LaunchRequest):
+async def launch_bot(payload: LaunchRequest, request: Request):
     repo_name = payload.repo_name
     bot_token = payload.bot_token
     script_name = payload.script_name
-    github_token = payload.github_token
+    github_token = payload.github_token or request.cookies.get("gh_token") or request.cookies.get("github_token")
 
     if not repo_name or not bot_token or not script_name:
-        raise HTTPException(status_code=400, detail="Missing required deployment fields")
+        raise HTTPException(status_code=400, detail="Missing required deployment variables.")
 
     if not github_token:
-        raise HTTPException(status_code=400, detail="Missing required GitHub access token")
+        raise HTTPException(status_code=401, detail="Unauthorized: GitHub access token is missing.")
 
-    # Select Python script template
+    # Match selection template content
     clean_script_name = script_name.replace(".py", "")
     if clean_script_name == "movie_bot":
         py_content = MOVIE_BOT_PY
-        actual_script = "movie_bot"
-    elif clean_script_name == "management_bot":
+    elif clean_script_name == "support_bot":
         py_content = SUPPORT_BOT_PY
-        actual_script = "management_bot"
-    elif clean_script_name == "custom_mod_bot":
+    elif clean_script_name == "feedback_bot":
         py_content = FEEDBACK_BOT_PY
-        actual_script = "custom_mod_bot"
+    elif clean_script_name == "starter_bot":
+        py_content = STARTER_BOT_PY
     else:
-        if "movie" in clean_script_name:
-            py_content = MOVIE_BOT_PY
-            actual_script = "movie_bot"
-        elif "management" in clean_script_name or "support" in clean_script_name:
-            py_content = SUPPORT_BOT_PY
-            actual_script = "management_bot"
-        elif "feedback" in clean_script_name or "custom_mod" in clean_script_name:
-            py_content = FEEDBACK_BOT_PY
-            actual_script = "custom_mod_bot"
-        else:
-            py_content = MOVIE_BOT_PY
-            actual_script = "movie_bot"
+        # Fallback starter script
+        py_content = STARTER_BOT_PY
 
     headers = {
         "Authorization": f"token {github_token}",
@@ -1191,7 +1462,7 @@ async def launch_bot(payload: LaunchRequest):
     }
 
     async with httpx.AsyncClient() as client:
-        # Verify Bot Token with Telegram API
+        # 1. Verify Bot Token authenticity with Telegram API
         get_me_url = f"https://api.telegram.org/bot{bot_token}/getMe"
         me_resp = await client.get(get_me_url)
         me_data = me_resp.json()
@@ -1201,11 +1472,21 @@ async def launch_bot(payload: LaunchRequest):
 
         bot_username = me_data.get("result", {}).get("username", "UnknownBot")
 
-        # Delete any active Telegram webhook so long-polling in GitHub Actions works instantly
+        # 2. Deactivate conflicting webhooks so long-polling is triggered clean
         delete_webhook_url = f"https://api.telegram.org/bot{bot_token}/deleteWebhook"
         await client.post(delete_webhook_url)
 
-        # Inject `.github/workflows/run_bot.yml`
+        # 3. Securely set GITHUB Actions Secrets for TELEGRAM_BOT_TOKEN
+        logger.info(f"Setting GITHUB Secret 'TELEGRAM_BOT_TOKEN' in {repo_name}...")
+        await set_github_secret(
+            client=client,
+            token=github_token,
+            repo_name=repo_name,
+            secret_name="TELEGRAM_BOT_TOKEN",
+            secret_value=bot_token
+        )
+
+        # 4. Programmatically Commit Workflow runner `.github/workflows/run_bot.yml`
         logger.info(f"Injecting .github/workflows/run_bot.yml into {repo_name}...")
         await commit_github_file(
             client=client,
@@ -1213,58 +1494,151 @@ async def launch_bot(payload: LaunchRequest):
             repo_name=repo_name,
             path=".github/workflows/run_bot.yml",
             content=RUN_BOT_YML,
-            message="[Platform Multi-Bot] Injected 24x7 runner workflow"
+            message="[Platform Multi-Bot] Provisioned continuous Actions workflow runner"
         )
 
-        # Inject `templates/{script_name}.py`
-        logger.info(f"Injecting templates/{actual_script}.py into {repo_name}...")
+        # 5. Programmatically Commit User Python bot script
+        logger.info(f"Injecting script {script_name} into {repo_name}...")
         await commit_github_file(
             client=client,
             token=github_token,
             repo_name=repo_name,
-            path=f"templates/{actual_script}.py",
+            path=script_name,
             content=py_content,
-            message=f"[Platform Multi-Bot] Injected script template for {actual_script}"
+            message=f"[Platform Multi-Bot] Provisioned python daemon script {script_name}"
         )
 
-        # Trigger repository dispatch to start the daemon workflow
+        # 6. Dispatch Repository trigger event to start the loop actions container
         dispatch_url = f"https://api.github.com/repos/{repo_name}/dispatches"
         dispatch_payload = {
             "event_type": "launch_bot",
             "client_payload": {
-                "bot_token": bot_token,
-                "script_name": actual_script,
+                "script_name": script_name,
                 "github_pat": github_token
             }
         }
         
         dispatch_resp = await client.post(dispatch_url, headers=headers, json=dispatch_payload)
         if dispatch_resp.status_code != 204:
-            logger.error(f"GitHub repository dispatch failed: {dispatch_resp.text}")
+            logger.error(f"GitHub repository dispatch event failed: {dispatch_resp.text}")
             raise HTTPException(
                 status_code=dispatch_resp.status_code, 
-                detail=f"Successfully committed bot files, but failed to dispatch the workflow runner: {dispatch_resp.text}"
+                detail=f"Injected bot code files, but failed to activate runner dispatch event: {dispatch_resp.text}"
             )
 
         return {
             "success": True,
-            "message": f"Successfully injected daemon workflow and triggered 24x7 Action runner for @{bot_username}",
+            "message": f"Orchestrator provisioned daemon files successfully.",
             "username": bot_username,
-            "bot_type": actual_script,
+            "bot_type": script_name,
             "repo_name": repo_name
         }
 
+@app.get("/api/logs")
+@app.get("/logs")
+async def get_logs(repo: str = Query(...), token: Optional[str] = Query(None), request: Request = None):
+    gh_token = token or request.cookies.get("gh_token") or request.cookies.get("github_token")
+    if not gh_token:
+        raise HTTPException(status_code=401, detail="Unauthorized: GitHub access token is missing.")
+    
+    headers = {
+        "Authorization": f"token {gh_token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "telegram-bot-backend"
+    }
+    
+    async with httpx.AsyncClient() as client:
+        # 1. Fetch latest Actions runs
+        runs_url = f"https://api.github.com/repos/{repo}/actions/runs?per_page=5"
+        runs_resp = await client.get(runs_url, headers=headers)
+        if runs_resp.status_code != 200:
+            raise HTTPException(status_code=runs_resp.status_code, detail=f"Failed to fetch runs: {runs_resp.text}")
+        
+        runs_data = runs_resp.json()
+        runs = runs_data.get("workflow_runs", [])
+        if not runs:
+            return {
+                "status": "idle",
+                "logs": "No active runner runs found in this repository. Trigger a fresh deployment..."
+            }
+        
+        # 2. Match the first matching multi-bot actions runner
+        target_run = None
+        for run in runs:
+            if run.get("name") == "24x7 Multi-Bot Host Engine" or "run_bot.yml" in run.get("path", ""):
+                target_run = run
+                break
+        
+        if not target_run:
+            target_run = runs[0]
+            
+        run_id = target_run.get("id")
+        run_status = target_run.get("status")
+        run_conclusion = target_run.get("conclusion")
+        
+        # 3. Fetch jobs inside this run to read terminal logs
+        jobs_url = f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/jobs"
+        jobs_resp = await client.get(jobs_url, headers=headers)
+        if jobs_resp.status_code != 200:
+            return {
+                "status": run_status,
+                "conclusion": run_conclusion,
+                "logs": f"Workflow run {run_id} status is: {run_status}. Waiting to trace job initialization..."
+            }
+        
+        jobs_data = jobs_resp.json()
+        jobs = jobs_data.get("jobs", [])
+        if not jobs:
+            return {
+                "status": run_status,
+                "conclusion": run_conclusion,
+                "logs": "Runner container allocation queued. Waiting on GitHub Actions availability..."
+            }
+            
+        # 4. Fetch raw job logs
+        job_id = jobs[0].get("id")
+        job_name = jobs[0].get("name")
+        job_status = jobs[0].get("status")
+        
+        logs_url = f"https://api.github.com/repos/{repo}/actions/jobs/{job_id}/logs"
+        logs_resp = await client.get(logs_url, headers=headers)
+        
+        if logs_resp.status_code == 200:
+            logs_text = logs_resp.text
+            # Truncate to avoid payload overflow
+            lines = logs_text.splitlines()
+            if len(lines) > 150:
+                truncated_logs = "\\n".join(lines[-150:])
+            else:
+                truncated_logs = "\\n".join(lines)
+                
+            return {
+                "status": run_status,
+                "conclusion": run_conclusion,
+                "job_name": job_name,
+                "job_status": job_status,
+                "logs": truncated_logs
+            }
+        else:
+            return {
+                "status": run_status,
+                "conclusion": run_conclusion,
+                "job_name": job_name,
+                "job_status": job_status,
+                "logs": f"[{job_status.upper()}] Runner initialized. Waiting for log streaming from pipeline step..."
+            }
+
 @app.post("/api/stop")
 @app.post("/stop")
-async def stop_bot(payload: StopRequest):
+async def stop_bot(payload: StopRequest, request: Request):
     repo_name = payload.repo_name
-    github_token = payload.github_token
+    github_token = payload.github_token or request.cookies.get("gh_token") or request.cookies.get("github_token")
 
     if not repo_name:
-        raise HTTPException(status_code=400, detail="Missing required repository name")
+        raise HTTPException(status_code=400, detail="Missing required repository name.")
 
     if not github_token:
-        raise HTTPException(status_code=400, detail="Missing required GitHub access token")
+        raise HTTPException(status_code=401, detail="Unauthorized: GitHub access token is missing.")
 
     headers = {
         "Authorization": f"token {github_token}",
@@ -1273,11 +1647,11 @@ async def stop_bot(payload: StopRequest):
     }
 
     async with httpx.AsyncClient() as client:
-        # Get in-progress runs
+        # Cancel any pending/running runs
         runs_url = f"https://api.github.com/repos/{repo_name}/actions/runs?status=in_progress"
         runs_resp = await client.get(runs_url, headers=headers)
         if runs_resp.status_code != 200:
-            raise HTTPException(status_code=runs_resp.status_code, detail=f"Failed to fetch active actions runs: {runs_resp.text}")
+            raise HTTPException(status_code=runs_resp.status_code, detail=f"Failed to query active runs: {runs_resp.text}")
 
         runs_data = runs_resp.json()
         runs = runs_data.get("workflow_runs", [])
@@ -1293,12 +1667,11 @@ async def stop_bot(payload: StopRequest):
 
         return {
             "success": True,
-            "message": f"Stopped {cancelled_count} active workflow runner instances.",
+            "message": f"Successfully cancelled {cancelled_count} active workflow runner instances.",
             "cancelled_count": cancelled_count
         }
 
 @app.post("/api/webhook")
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
-    # Safe webhook fallback endpoint
-    return {"status": "ignored", "detail": "Platform uses continuous long-polling via Actions runners."}
+    return {"status": "ignored", "detail": "Daemon orchestrates bot instances via continuous Actions long-polling loops."}
