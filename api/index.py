@@ -1193,6 +1193,7 @@ async def root(request: Request):
     return HTMLResponse(content=html_content)
 
 @app.get("/api/health")
+@app.get("/health")
 async def health():
     return {
         "status": "healthy",
@@ -1201,6 +1202,7 @@ async def health():
     }
 
 @app.get("/api/login")
+@app.get("/login")
 async def login(request: Request):
     if not GITHUB_CLIENT_ID:
         # Elegant sandbox fallback so that the applet works flawlessly in AI Studio out of the box
@@ -1212,7 +1214,8 @@ async def login(request: Request):
     return {"url": auth_url}
 
 @app.get("/api/callback")
-async def oauth_callback(code: str, request: Request):
+@app.get("/callback")
+async def oauth_callback(request: Request, code: Optional[str] = Query(None)):
     if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
         print("[DEBUG] GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET is missing during callback handling!")
         if code == "mock_sandbox_code":
@@ -1415,6 +1418,7 @@ async def oauth_callback(code: str, request: Request):
     return response
 
 @app.get("/api/repos")
+@app.get("/repos")
 async def get_repositories(token: str = Query(...)):
     if token.startswith("mock_sandbox_") or token.startswith("demo_"):
         return [
@@ -1474,6 +1478,7 @@ async def commit_github_file(client: httpx.AsyncClient, token: str, repo_name: s
         raise HTTPException(status_code=put_resp.status_code, detail=f"Failed to commit {path}: {put_resp.text}")
 
 @app.post("/api/launch")
+@app.post("/launch")
 async def launch_bot(payload: LaunchRequest):
     repo_name = payload.repo_name
     bot_token = payload.bot_token
@@ -1578,6 +1583,7 @@ async def launch_bot(payload: LaunchRequest):
         }
 
 @app.post("/api/stop")
+@app.post("/stop")
 async def stop_bot(payload: StopRequest):
     repo_name = payload.repo_name
     github_token = payload.github_token
@@ -1617,6 +1623,7 @@ async def stop_bot(payload: StopRequest):
         }
 
 @app.post("/api/webhook")
+@app.post("/webhook")
 async def telegram_webhook(
     request: Request,
     token: str = Query(...),
