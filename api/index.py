@@ -819,6 +819,18 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         // Fetch User Info
         async function fetchUserInfo() {
             if (!githubToken) return;
+            if (githubToken.startsWith('mock_sandbox_') || githubToken.startsWith('demo_')) {
+                const user = {
+                    login: 'sandbox-user',
+                    name: 'Sandbox Developer',
+                    avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'
+                };
+                localStorage.setItem('github_username', user.login);
+                document.getElementById('user-display-name').innerText = user.name || user.login;
+                document.getElementById('user-github-handle').innerText = `@${user.login}`;
+                document.getElementById('user-avatar').innerHTML = `<img src="${user.avatar_url}" alt="Avatar" class="w-full h-full object-cover">`;
+                return;
+            }
             try {
                 const resp = await fetch('https://api.github.com/user', {
                     headers: {
@@ -1240,12 +1252,16 @@ async def oauth_callback(code: str, request: Request):
                 </div>
                 <script>
                     const token = "{access_token}";
-                    if (window.opener) {{
-                        window.opener.postMessage({{ type: "OAUTH_AUTH_SUCCESS", token: token }}, "*");
-                        setTimeout(() => {{ window.close(); }}, 1000);
-                    }} else {{
+                    if (window.opener) {
+                        window.opener.postMessage({ type: "OAUTH_AUTH_SUCCESS", token: token }, "*");
+                        setTimeout(() => { window.close(); }, 1000);
+                        // Fallback in case window.close is blocked or ignored by the browser
+                        setTimeout(() => {
+                            window.location.href = "/?token=" + token + "#dashboard-section";
+                        }, 1800);
+                    } else {
                         window.location.href = "/?token=" + token + "#dashboard-section";
-                    }}
+                    }
                 </script>
             </body>
             </html>
@@ -1372,12 +1388,16 @@ async def oauth_callback(code: str, request: Request):
 
         <script>
             const token = "{access_token}";
-            if (window.opener) {{
-                window.opener.postMessage({{ type: "OAUTH_AUTH_SUCCESS", token: token }}, "*");
-                setTimeout(() => {{ window.close(); }}, 1000);
-            }} else {{
+            if (window.opener) {
+                window.opener.postMessage({ type: "OAUTH_AUTH_SUCCESS", token: token }, "*");
+                setTimeout(() => { window.close(); }, 1000);
+                // Fallback in case window.close is blocked or ignored by the browser
+                setTimeout(() => {
+                    window.location.href = "/?token=" + token + "#dashboard-section";
+                }, 1800);
+            } else {
                 window.location.href = "/?token=" + token + "#dashboard-section";
-            }}
+            }
         </script>
     </body>
     </html>
@@ -1396,6 +1416,13 @@ async def oauth_callback(code: str, request: Request):
 
 @app.get("/api/repos")
 async def get_repositories(token: str = Query(...)):
+    if token.startswith("mock_sandbox_") or token.startswith("demo_"):
+        return [
+            {"id": 101, "name": "my-telegram-bot", "full_name": "sandbox-user/my-telegram-bot", "private": False, "default_branch": "main"},
+            {"id": 102, "name": "movie-showcase-bot", "full_name": "sandbox-user/movie-showcase-bot", "private": True, "default_branch": "master"},
+            {"id": 103, "name": "customer-support-agent", "full_name": "sandbox-user/customer-support-agent", "private": False, "default_branch": "main"}
+        ]
+
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             "https://api.github.com/user/repos?per_page=100&sort=updated",
@@ -1455,6 +1482,16 @@ async def launch_bot(payload: LaunchRequest):
 
     if not repo_name or not bot_token or not script_name:
         raise HTTPException(status_code=400, detail="Missing required deployment fields")
+
+    if github_token and (github_token.startswith("mock_sandbox_") or github_token.startswith("demo_")):
+        # Gracefully handle sandbox simulation for instant testing
+        bot_username = "MySandboxBot"
+        return {
+            "status": "success",
+            "message": f"Successfully injected daemon workflow and triggered 24x7 Action runner for @{bot_username} (Sandbox Mode)",
+            "bot_username": bot_username,
+            "workflow_url": f"https://github.com/{repo_name}/actions"
+        }
 
     # Select Python script template
     if "movie" in script_name:

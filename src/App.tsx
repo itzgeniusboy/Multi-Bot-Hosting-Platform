@@ -195,6 +195,27 @@ export default function App() {
     setIsFetchingUser(true);
     setIsFetchingRepos(true);
     try {
+      if (token.startsWith('mock_sandbox_') || token.startsWith('demo_')) {
+        const mockUser = {
+          login: 'sandbox-user',
+          name: 'Sandbox Developer',
+          avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+          html_url: 'https://github.com',
+        };
+        setGitHubUser(mockUser);
+
+        // Fetch repos
+        const reposResp = await fetch(`/api/repos?token=${token}`);
+        if (reposResp.ok) {
+          const reposData = await reposResp.json();
+          setRepos(reposData);
+          if (reposData.length > 0) {
+            setSelectedRepo(reposData[0].full_name || reposData[0].name || '');
+          }
+        }
+        return;
+      }
+
       // 1. Fetch user profile
       const userResp = await fetch('https://api.github.com/user', {
         headers: {
@@ -366,7 +387,15 @@ export default function App() {
   useEffect(() => {
     const handleOAuthMessage = (event: MessageEvent) => {
       const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && !origin.includes('0.0.0.0') && !origin.includes('127.0.0.1')) {
+      const isAllowedOrigin = 
+        origin.endsWith('.run.app') || 
+        origin.endsWith('.vercel.app') || 
+        origin.includes('localhost') || 
+        origin.includes('0.0.0.0') || 
+        origin.includes('127.0.0.1') ||
+        origin === window.location.origin;
+
+      if (!isAllowedOrigin) {
         return;
       }
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.token) {

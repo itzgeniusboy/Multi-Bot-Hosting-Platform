@@ -417,6 +417,10 @@ app.get("/api/callback", async (req, res) => {
                 if (window.opener) {
                     window.opener.postMessage({ type: "OAUTH_AUTH_SUCCESS", token: token }, "*");
                     setTimeout(() => { window.close(); }, 1000);
+                    // Fallback in case window.close is blocked or ignored by the browser
+                    setTimeout(() => {
+                        window.location.href = "/?token=" + token + "#dashboard-section";
+                    }, 1800);
                 } else {
                     window.location.href = "/?token=" + token + "#dashboard-section";
                 }
@@ -550,6 +554,10 @@ app.get("/api/callback", async (req, res) => {
               if (window.opener) {
                   window.opener.postMessage({ type: "OAUTH_AUTH_SUCCESS", token: token }, "*");
                   setTimeout(() => { window.close(); }, 1000);
+                  // Fallback in case window.close is blocked or ignored by the browser
+                  setTimeout(() => {
+                      window.location.href = "/?token=" + token + "#dashboard-section";
+                  }, 1800);
               } else {
                   window.location.href = "/?token=" + token + "#dashboard-section";
               }
@@ -566,6 +574,14 @@ app.get("/api/repos", async (req, res) => {
   const token = req.query.token as string;
   if (!token) {
     return res.status(400).json({ error: "Missing required access token" });
+  }
+
+  if (token.startsWith("mock_sandbox_") || token.startsWith("demo_")) {
+    return res.json([
+      { id: 101, name: "my-telegram-bot", full_name: "sandbox-user/my-telegram-bot", private: false, default_branch: "main" },
+      { id: 102, name: "movie-showcase-bot", full_name: "sandbox-user/movie-showcase-bot", private: true, default_branch: "master" },
+      { id: 103, name: "customer-support-agent", full_name: "sandbox-user/customer-support-agent", private: false, default_branch: "main" }
+    ]);
   }
 
   try {
@@ -602,6 +618,17 @@ app.post("/api/launch", async (req, res) => {
 
   if (!repo_name || !bot_token || !script_name || !github_token) {
     return res.status(400).json({ success: false, detail: "Missing required deployment fields" });
+  }
+
+  if (github_token && (github_token.startsWith("mock_sandbox_") || github_token.startsWith("demo_"))) {
+    const bot_username = "MySandboxBot";
+    return res.json({
+      success: true,
+      status: "success",
+      message: `Successfully injected daemon workflow and triggered 24x7 Action runner for @${bot_username} (Sandbox Mode)`,
+      bot_username: bot_username,
+      workflow_url: `https://github.com/${repo_name}/actions`
+    });
   }
 
   // Select script content
