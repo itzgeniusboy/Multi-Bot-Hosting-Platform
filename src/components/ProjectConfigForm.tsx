@@ -265,7 +265,7 @@ export default function ProjectConfigForm({
         {/* Workflow preview box */}
         <div className="p-4 rounded-xl border border-[#00D4FF]/10 bg-[#050B18]/30 space-y-2">
           <span className="text-[9px] font-mono text-[#4A6080] uppercase font-bold tracking-wider block">
-            Generated Workflow (.github/workflows/bot.yml)
+            Generated Workflow (.github/workflows/mbhp_bot.yml)
           </span>
           <pre className="text-[8px] font-mono text-[#4A6080] bg-[#050B18]/85 p-3 rounded-lg border border-[#00D4FF]/5 max-h-[140px] overflow-y-auto scrollbar-none leading-tight select-text text-left">
 {`name: 24x7 Bot Runner

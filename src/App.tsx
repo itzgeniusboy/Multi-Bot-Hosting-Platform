@@ -518,12 +518,24 @@ export default function App() {
       if (resp.ok) {
         const data = await resp.json();
         if (data.url) {
-          window.location.href = data.url;
+          const width = 600;
+          const height = 700;
+          const left = window.screenX + (window.outerWidth - width) / 2;
+          const top = window.screenY + (window.outerHeight - height) / 2;
+          const popup = window.open(
+            data.url,
+            'github_oauth_popup',
+            `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,status=yes`
+          );
+          if (!popup) {
+            addToast('Popup blocked! Please allow popups for this site to log in.', 'error');
+          }
         } else {
           throw new Error('No authentication redirect URL found.');
         }
       } else {
-        throw new Error('Authentication gateway offline.');
+        const errText = await resp.text();
+        throw new Error(errText || 'Authentication gateway offline.');
       }
     } catch (e: any) {
       console.error('GitHub OAuth redirect error:', e);
@@ -586,6 +598,27 @@ export default function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
       addToast('GitHub session restored.', 'success');
     }
+  }, []);
+
+  // Listen for success message from popup (after callback completes)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && !origin.includes('vercel.app')) {
+        return;
+      }
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        const token = event.data.token;
+        if (token) {
+          localStorage.setItem('github_token', token);
+          setGithubToken(token);
+          audio.playSuccess();
+          addToast('Authorized successfully via GitHub OAuth!', 'success');
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, []);
 
   // Bot Node Action controls

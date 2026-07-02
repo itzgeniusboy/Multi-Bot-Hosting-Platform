@@ -2,6 +2,8 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import sodium from "libsodium-wrappers";
+// @ts-ignore
+import tweetsodium from "tweetsodium";
 
 const app = express();
 const PORT = 3000;
@@ -330,18 +332,19 @@ if __name__ == "__main__":
 
 // Helper function to commit/write a file to GitHub
 async function commitGitHubFile(token: string, repoName: string, filePath: string, content: string, message: string) {
+  const [owner, repo] = repoName.split("/");
   const headers = {
-    Authorization: `token ${token}`,
-    Accept: "application/vnd.github.v3+json",
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
     "User-Agent": "telegram-bot-backend",
   };
 
   // 1. Check if file exists
-  let sha = undefined;
-  const checkUrl = `https://api.github.com/repos/${repoName}/contents/${filePath}`;
+  let sha = null;
+  const checkUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`;
   try {
     const checkResp = await fetch(checkUrl, { headers });
-    if (checkResp.status === 200) {
+    if (checkResp.ok) {
       const data: any = await checkResp.json();
       sha = data.sha;
     }
@@ -350,14 +353,12 @@ async function commitGitHubFile(token: string, repoName: string, filePath: strin
   }
 
   // 2. Commit file
-  const base64Content = Buffer.from(content).toString("base64");
+  const base64Content = Buffer.from(content, "utf-8").toString("base64");
   const putBody: any = {
     message,
     content: base64Content,
+    ...(sha && { sha })
   };
-  if (sha) {
-    putBody.sha = sha;
-  }
 
   const putResp = await fetch(checkUrl, {
     method: "PUT",
@@ -382,7 +383,12 @@ async function commitGitHubFile(token: string, repoName: string, filePath: strin
 // API Routes
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || "";
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || "";
-const REDIRECT_URI = "https://multi-bot-hosting-platform.vercel.app/api/callback";
+
+const getRedirectUri = (req: express.Request): string => {
+  const host = req.get("host") || "localhost:3000";
+  const protocol = host.includes("localhost") ? "http" : "https";
+  return `${protocol}://${host}/api/callback`;
+};
 
 if (!GITHUB_CLIENT_ID) {
   console.log("[DEBUG] GITHUB_CLIENT_ID environment variable is missing!");
@@ -406,7 +412,8 @@ app.get("/api/login", (req, res) => {
     });
   }
 
-  const authUrl = `https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=repo%20workflow`;
+  const redirectUri = getRedirectUri(req);
+  const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=repo%20workflow%20read:user`;
   res.json({ url: authUrl });
 });
 
@@ -466,7 +473,7 @@ app.get("/api/callback", async (req, res) => {
         client_id: GITHUB_CLIENT_ID,
         client_secret: GITHUB_CLIENT_SECRET,
         code,
-        redirect_uri: REDIRECT_URI,
+        redirect_uri: getRedirectUri(req),
       }),
     });
 
@@ -647,7 +654,7 @@ app.post("/api/workflow/setup", async (req, res) => {
   // 1. Pre-flight check: Automatic GitHub token validation
   try {
     const headers = {
-      Authorization: `token ${github_token}`,
+      Authorization: `Bearer ${github_token}`,
       Accept: "application/vnd.github.v3+json",
       "User-Agent": "telegram-bot-backend",
     };
@@ -729,7 +736,7 @@ jobs:
     await commitGitHubFile(
       github_token,
       repo_name,
-      ".github/workflows/bot.yml",
+      ".github/workflows/mbhp_bot.yml",
       workflowYml,
       "[Platform] Setup 24x7 Continuous Bot Runner Workflow"
     );
@@ -739,7 +746,7 @@ jobs:
       id: repo_name.replace("/", "-"),
       repo_name,
       bot_token: "",
-      script_name: "bot.yml",
+      script_name: "mbhp_bot.yml",
       username: repo_name.split("/")[1],
       status: "offline",
       created_at: new Date().toISOString(),
@@ -755,7 +762,7 @@ jobs:
     }
     saveProjects(projects);
 
-    res.json({ success: true, message: "Workflow .github/workflows/bot.yml successfully committed!" });
+    res.json({ success: true, message: "Workflow .github/workflows/mbhp_bot.yml successfully committed!" });
   } catch (err: any) {
     if (err.message && err.message.includes("GITHUB_WRITE_FORBIDDEN_403")) {
       return res.status(403).json({
@@ -778,13 +785,14 @@ app.post("/api/secrets/set", async (req, res) => {
   }
 
   try {
+    const [owner, repo] = repo_name.split("/");
     const headers = {
-      Authorization: `token ${github_token}`,
-      Accept: "application/vnd.github.v3+json",
+      Authorization: `Bearer ${github_token}`,
+      Accept: "application/vnd.github+json",
       "User-Agent": "telegram-bot-backend",
     };
 
-    const pubKeyResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/secrets/public-key`, { headers });
+    const pubKeyResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/secrets/public-key`, { headers });
     if (pubKeyResp.status !== 200) {
       const text = await pubKeyResp.text();
       return res.status(pubKeyResp.status).json({ error: `Failed to fetch public key: ${text}` });
@@ -792,13 +800,13 @@ app.post("/api/secrets/set", async (req, res) => {
     const pubKeyData: any = await pubKeyResp.json();
     const { key_id, key: publicKeyBase64 } = pubKeyData;
 
-    await sodium.ready;
-    const binSecret = sodium.from_string(secret_value);
-    const binKey = sodium.from_base64(publicKeyBase64);
-    const encryptedBytes = sodium.crypto_box_seal(binSecret, binKey);
-    const encrypted_value = sodium.to_base64(encryptedBytes);
+    // Encrypt using tweetsodium (pure JS)
+    const messageBytes = Buffer.from(secret_value, "utf-8");
+    const keyBytes = Buffer.from(publicKeyBase64, "base64");
+    const encryptedBytes = tweetsodium.seal(messageBytes, keyBytes);
+    const encrypted_value = Buffer.from(encryptedBytes).toString("base64");
 
-    const putSecretResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/secrets/${secret_name}`, {
+    const putSecretResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/secrets/${secret_name}`, {
       method: "PUT",
       headers: {
         ...headers,
@@ -844,7 +852,7 @@ app.get("/api/workflow/status", async (req, res) => {
     const data: any = await resp.json();
     const runs = data.workflow_runs || [];
 
-    const botRuns = runs.filter((r: any) => r.name === "24x7 Bot Runner" || r.path.includes("bot.yml"));
+    const botRuns = runs.filter((r: any) => r.name === "24x7 Bot Runner" || r.path.includes("mbhp_bot.yml") || r.path.includes("bot.yml"));
     
     if (botRuns.length === 0) {
       return res.json({ status: "not_setup", message: "No bot workflow run found. Setup is required." });
@@ -899,14 +907,14 @@ app.post("/api/workflow/start", async (req, res) => {
 
   try {
     const headers = {
-      Authorization: `token ${github_token}`,
-      Accept: "application/vnd.github.v3+json",
+      Authorization: `Bearer ${github_token}`,
+      Accept: "application/vnd.github+json",
       "User-Agent": "telegram-bot-backend",
       "Content-Type": "application/json",
     };
 
-    const url = `https://api.github.com/repos/${repo_name}/actions/workflows/bot.yml/dispatches`;
-    const resp = await fetch(url, {
+    let url = `https://api.github.com/repos/${repo_name}/actions/workflows/mbhp_bot.yml/dispatches`;
+    let resp = await fetch(url, {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -915,8 +923,18 @@ app.post("/api/workflow/start", async (req, res) => {
     });
 
     if (resp.status !== 204) {
-      const text = await resp.text();
-      return res.status(resp.status).json({ error: `Failed to dispatch: ${text}` });
+      const fallbackUrl = `https://api.github.com/repos/${repo_name}/actions/workflows/bot.yml/dispatches`;
+      const fallbackResp = await fetch(fallbackUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          ref: defaultBranch,
+        }),
+      });
+      if (fallbackResp.status !== 204) {
+        const text = await fallbackResp.text();
+        return res.status(fallbackResp.status).json({ error: `Failed to dispatch: ${text}` });
+      }
     }
 
     const existingIdx = projects.findIndex((p) => p.repo_name === repo_name);
@@ -940,8 +958,8 @@ app.post("/api/workflow/stop", async (req, res) => {
 
   try {
     const headers = {
-      Authorization: `token ${github_token}`,
-      Accept: "application/vnd.github.v3+json",
+      Authorization: `Bearer ${github_token}`,
+      Accept: "application/vnd.github+json",
       "User-Agent": "telegram-bot-backend",
     };
 
@@ -956,7 +974,7 @@ app.post("/api/workflow/stop", async (req, res) => {
 
     let cancelledCount = 0;
     for (const run of runs) {
-      if (run.name === "24x7 Bot Runner" || run.path.includes("bot.yml")) {
+      if (run.name === "24x7 Bot Runner" || run.path.includes("mbhp_bot.yml") || run.path.includes("bot.yml")) {
         const cancelResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/runs/${run.id}/cancel`, {
           method: "POST",
           headers,
@@ -987,8 +1005,8 @@ app.post("/api/workflow/restart", async (req, res) => {
 
   try {
     const headers = {
-      Authorization: `token ${github_token}`,
-      Accept: "application/vnd.github.v3+json",
+      Authorization: `Bearer ${github_token}`,
+      Accept: "application/vnd.github+json",
       "User-Agent": "telegram-bot-backend",
     };
 
@@ -997,7 +1015,7 @@ app.post("/api/workflow/restart", async (req, res) => {
       const data: any = await runsResp.json();
       const runs = data.workflow_runs || [];
       for (const run of runs) {
-        if (run.name === "24x7 Bot Runner" || run.path.includes("bot.yml")) {
+        if (run.name === "24x7 Bot Runner" || run.path.includes("mbhp_bot.yml") || run.path.includes("bot.yml")) {
           await fetch(`https://api.github.com/repos/${repo_name}/actions/runs/${run.id}/cancel`, {
             method: "POST",
             headers,
@@ -1008,8 +1026,8 @@ app.post("/api/workflow/restart", async (req, res) => {
 
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    const url = `https://api.github.com/repos/${repo_name}/actions/workflows/bot.yml/dispatches`;
-    const resp = await fetch(url, {
+    let url = `https://api.github.com/repos/${repo_name}/actions/workflows/mbhp_bot.yml/dispatches`;
+    let resp = await fetch(url, {
       method: "POST",
       headers: {
         ...headers,
@@ -1021,8 +1039,21 @@ app.post("/api/workflow/restart", async (req, res) => {
     });
 
     if (resp.status !== 204) {
-      const text = await resp.text();
-      return res.status(resp.status).json({ error: `Failed to trigger restart: ${text}` });
+      const fallbackUrl = `https://api.github.com/repos/${repo_name}/actions/workflows/bot.yml/dispatches`;
+      const fallbackResp = await fetch(fallbackUrl, {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ref: branch || "main",
+        }),
+      });
+      if (fallbackResp.status !== 204) {
+        const text = await fallbackResp.text();
+        return res.status(fallbackResp.status).json({ error: `Failed to trigger restart: ${text}` });
+      }
     }
 
     const existingIdx = projects.findIndex((p) => p.repo_name === repo_name);
@@ -1046,8 +1077,8 @@ app.get("/api/workflow/logs", async (req, res) => {
 
   try {
     const headers = {
-      Authorization: `token ${github_token}`,
-      Accept: "application/vnd.github.v3+json",
+      Authorization: `Bearer ${github_token}`,
+      Accept: "application/vnd.github+json",
       "User-Agent": "telegram-bot-backend",
     };
 
@@ -1060,7 +1091,7 @@ app.get("/api/workflow/logs", async (req, res) => {
       }
       const data: any = await runsResp.json();
       const runs = data.workflow_runs || [];
-      const botRuns = runs.filter((r: any) => r.name === "24x7 Bot Runner" || r.path.includes("bot.yml"));
+      const botRuns = runs.filter((r: any) => r.name === "24x7 Bot Runner" || r.path.includes("mbhp_bot.yml") || r.path.includes("bot.yml"));
       if (botRuns.length === 0) {
         return res.json({ logs: "No bot workflow runs found." });
       }

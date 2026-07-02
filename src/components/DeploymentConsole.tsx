@@ -110,12 +110,12 @@ export default function DeploymentConsole({
 
         const wfData = await wfResp.json();
         updateStage('workflow', 'success');
-        addLog('Successfully committed .github/workflows/bot.yml to the main branch.', 'success');
+        addLog('Successfully committed .github/workflows/mbhp_bot.yml to the main branch.', 'success');
         addLog(`Commit SHA: ${wfData.commit_sha || 'N/A'}`, 'info');
 
         // 2. Encrypt & commit secrets (BOT_TOKEN and other keys)
         updateStage('secrets', 'running');
-        addLog('Initializing Sodium-based public-key encryption layer...', 'info');
+        addLog('Initializing tweetnacl-based public-key encryption layer...', 'info');
         await new Promise((r) => setTimeout(r, 500));
 
         // Prepare secrets list
