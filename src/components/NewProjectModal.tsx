@@ -74,14 +74,27 @@ export default function NewProjectModal({
   // Auto-detect script entry point in repository root
   useEffect(() => {
     if (selectedRepo && githubToken && step === 'configure' && !initialData) {
-      fetch(`/api/repo/detect-entrypoint?repo_name=${encodeURIComponent(selectedRepo)}&github_token=${encodeURIComponent(githubToken)}`)
+      const headers = {
+        'Authorization': `token ${githubToken}`,
+        'Accept': 'application/vnd.github.v3+json',
+      };
+      fetch(`https://api.github.com/repos/${selectedRepo}/contents`, { headers })
         .then((res) => {
           if (res.ok) return res.json();
           throw new Error('Failed to auto-detect entry point');
         })
-        .then((data) => {
-          if (data.default_command) {
-            setSelectedScript(data.default_command);
+        .then((items) => {
+          if (Array.isArray(items)) {
+            const fileNames = items.map((item: any) => item.name);
+            if (fileNames.includes("bot.py")) {
+              setSelectedScript("python bot.py");
+            } else if (fileNames.includes("main.py")) {
+              setSelectedScript("python main.py");
+            } else if (fileNames.includes("bot.js")) {
+              setSelectedScript("node bot.js");
+            } else if (fileNames.includes("index.js")) {
+              setSelectedScript("node index.js");
+            }
           }
         })
         .catch((err) => console.error("Error auto-detecting entry point:", err));
@@ -93,6 +106,32 @@ export default function NewProjectModal({
   // Handle successful deployment
   const handleDeploymentSuccess = (result: any) => {
     setDeployResult(result);
+    
+    try {
+      const entryFile = selectedScript.split(' ').pop() || 'bot.py';
+      const language = selectedScript.toLowerCase().includes('python') || selectedScript.toLowerCase().includes('.py') ? 'python' : 'node';
+      const [owner, name] = selectedRepo.split('/');
+      
+      const botObject = {
+        id: Date.now(),
+        repoOwner: owner || 'username',
+        repoName: name || 'reponame', 
+        repoFullName: selectedRepo,
+        language: language,
+        entryFile: entryFile,
+        deployedAt: new Date().toISOString(),
+        workflowFile: "mbhp_bot.yml"
+      };
+
+      const saved = localStorage.getItem('multi_bot_saved_bots');
+      const list = saved ? JSON.parse(saved) : [];
+      const filtered = list.filter((b: any) => b.repoFullName !== selectedRepo);
+      filtered.push(botObject);
+      localStorage.setItem('multi_bot_saved_bots', JSON.stringify(filtered));
+    } catch (e) {
+      console.error("Error saving bot to localStorage:", e);
+    }
+
     setStep('live');
     onDeploySuccess(); // refresh parent dashboard active bot listings
   };
@@ -183,25 +222,26 @@ export default function NewProjectModal({
               (step === 'live' && i < 3);
 
             return (
-              <div 
-                key={st.key} 
-                className="flex items-center gap-2 shrink-0 animate-step-slide"
-                style={{ animationDelay: `${i * 80}ms` }}
-              >
-                <div className={`flex items-center gap-1.5 text-[10px] font-mono font-bold tracking-wider ${
-                  isActive
-                    ? 'text-[#00D4FF]'
-                    : isCompleted
-                    ? 'text-emerald-400'
-                    : 'text-[#4A6080]'
-                }`}>
-                  <IconComponent className="w-3.5 h-3.5" />
-                  <span>{st.label}</span>
+              <React.Fragment key={st.key}>
+                <div 
+                  className={`items-center gap-2 shrink-0 animate-step-slide ${isActive ? 'flex' : 'hidden sm:flex'}`}
+                  style={{ animationDelay: `${i * 80}ms` }}
+                >
+                  <div className={`flex items-center gap-1.5 text-[10px] font-mono font-bold tracking-wider ${
+                    isActive
+                      ? 'text-[#00D4FF]'
+                      : isCompleted
+                      ? 'text-emerald-400'
+                      : 'text-[#4A6080]'
+                  }`}>
+                    <IconComponent className="w-3.5 h-3.5" />
+                    <span>{st.label}</span>
+                  </div>
                 </div>
                 {i < stepsList.length - 1 && (
-                  <span className="text-[10px] font-mono text-[#4A6080]/40">/</span>
+                  <span className={`text-[10px] font-mono text-[#4A6080]/40 ${isActive ? 'inline' : 'hidden sm:inline'}`}>/</span>
                 )}
-              </div>
+              </React.Fragment>
             );
           })}
         </div>

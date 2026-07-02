@@ -24,6 +24,17 @@ export interface Project {
   health?: 'healthy' | 'degraded' | 'down';
 }
 
+export interface SavedBot {
+  id: number;
+  repoOwner: string;
+  repoName: string;
+  repoFullName: string;
+  language: string;
+  entryFile: string;
+  deployedAt: string;
+  workflowFile: string;
+}
+
 export interface LogEntry {
   id: string;
   timestamp: string;

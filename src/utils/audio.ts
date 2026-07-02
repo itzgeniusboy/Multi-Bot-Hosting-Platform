@@ -169,6 +169,42 @@ class SoundSynthesizer {
       // Ignored
     }
   }
+
+  public playError() {
+    if (this.isMuted) return;
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc1.type = 'sawtooth';
+      osc2.type = 'sine';
+
+      const now = this.ctx.currentTime;
+      osc1.frequency.setValueAtTime(150, now);
+      osc1.frequency.linearRampToValueAtTime(100, now + 0.25);
+
+      osc2.frequency.setValueAtTime(155, now);
+      osc2.frequency.linearRampToValueAtTime(105, now + 0.25);
+
+      gain.gain.setValueAtTime(0.015, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+
+      osc1.start();
+      osc2.start();
+      osc1.stop(now + 0.25);
+      osc2.stop(now + 0.25);
+    } catch (e) {
+      // Ignored
+    }
+  }
 }
 
 export const audio = new SoundSynthesizer();

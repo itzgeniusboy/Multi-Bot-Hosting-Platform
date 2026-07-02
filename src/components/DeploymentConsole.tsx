@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Loader2, CheckCircle, XCircle, Terminal, AlertCircle, RefreshCw, ArrowLeft } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Terminal, AlertCircle } from 'lucide-react';
+import sodium from 'libsodium-wrappers';
 
 interface DeploymentConsoleProps {
   repoName: string;
@@ -38,32 +39,26 @@ export default function DeploymentConsole({
 }: DeploymentConsoleProps) {
   const [stages, setStages] = useState<Stage[]>([
     { id: 'workflow', name: 'Creating GitHub Workflow', status: 'pending' },
-    { id: 'secrets', name: 'Encrypting & Committing Secrets', status: 'pending' },
+    { id: 'secrets', name: 'Configuring Encryption & Secrets', status: 'pending' },
     { id: 'register', name: 'Registering Bot Node', status: 'pending' },
-    { id: 'launch', name: 'Dispatching Live Run Event', status: 'pending' }
+    { id: 'launch', name: 'Launching Runner Thread', status: 'pending' },
   ]);
 
   const [logs, setLogs] = useState<LogLine[]>([]);
-  const consoleEndRef = useRef<HTMLDivElement>(null);
-  const [deployError, setDeployError] = useState<string | null>(null);
-  const hasTriggeredDeploy = useRef(false);
-
-  // Helper to format timestamps for logs
-  const getTimestamp = () => {
-    const d = new Date();
-    return d.toTimeString().split(' ')[0];
-  };
-
-  const addLog = (text: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
-    setLogs((prev) => [...prev, { text, type, timestamp: getTimestamp() }]);
-  };
-
   const [logFilter, setLogFilter] = useState<'all' | 'info' | 'warning' | 'error'>('all');
   const [isAutoScrollPaused, setIsAutoScrollPaused] = useState(false);
+  const [deployError, setDeployError] = useState<string | null>(null);
+
+  const consoleEndRef = useRef<HTMLDivElement>(null);
+  const hasTriggeredDeploy = useRef(false);
+
+  const addLog = (text: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs((prev) => [...prev, { text, type, timestamp }]);
+  };
 
   const filteredLogs = logs.filter((log) => {
     if (logFilter === 'all') return true;
-    if (logFilter === 'info') return log.type === 'info' || log.type === 'success';
     return log.type === logFilter;
   });
 
@@ -91,41 +86,120 @@ export default function DeploymentConsole({
       addLog(`Selected repository namespace: ${repoName}`, 'info');
       addLog(`Configured daemon launch sequence: ${scriptName || 'python main.py'}`, 'info');
 
+      const [owner, repo] = repoName.split('/');
+      const headers = {
+        'Authorization': `token ${githubToken}`,
+        'Accept': 'application/vnd.github.v3+json',
+      };
+
       // 1. Setup GitHub Workflows
       updateStage('workflow', 'running');
       addLog('Generating modern YAML configuration for 24x7 bot runtime...', 'info');
       await new Promise((r) => setTimeout(r, 600));
 
-      try {
-        const wfResp = await fetch(new URL('/api/workflow/setup', window.location.href).href, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ repo_name: repoName, github_token: githubToken })
-        });
+      const workflowYml = `name: 24x7 Bot Runner
 
-        if (!wfResp.ok) {
-          let errMsg = '';
-          try {
-            const wfErrData = await wfResp.json();
-            errMsg = wfErrData.error || wfErrData.message || JSON.stringify(wfErrData);
-          } catch {
-            try {
-              errMsg = await wfResp.text();
-            } catch {
-              errMsg = `HTTP error ${wfResp.status}`;
-            }
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+  push:
+    branches: [ main, master, dev ]
+
+concurrency:
+  group: bot-runner-\${{ github.repository }}
+  cancel-in-progress: true
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          elif [ -f package.json ]; then
+            sudo apt-get install -y nodejs npm
+            npm install
+          else
+            pip install pyTelegramBotAPI telebot aiogram httpx
+          fi
+
+      - name: Run Bot Node
+        env:
+          BOT_TOKEN: \${{ secrets.BOT_TOKEN }}
+        run: |
+          RUN_COMMAND="\${{ secrets.RUN_COMMAND }}"
+          if [ -z "$RUN_COMMAND" ]; then
+            if [ -f bot.py ]; then RUN_COMMAND="python bot.py"
+            elif [ -f main.py ]; then RUN_COMMAND="python main.py"
+            elif [ -f index.js ]; then RUN_COMMAND="node index.js"
+            elif [ -f package.json ]; then RUN_COMMAND="npm start"
+            else RUN_COMMAND="python bot.py"
+            fi
+          fi
+          echo "Executing start command: $RUN_COMMAND"
+          eval $RUN_COMMAND
+`;
+
+      try {
+        addLog('Checking for existing workflow file SHA...', 'info');
+        let sha = null;
+        const workflowPath = '.github/workflows/mbhp_bot.yml';
+        const checkUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${workflowPath}`;
+        
+        try {
+          const checkResp = await fetch(checkUrl, { headers });
+          if (checkResp.ok) {
+            const checkData = await checkResp.json();
+            sha = checkData.sha;
+            addLog(`Found existing workflow at SHA: ${sha}`, 'info');
           }
-          throw new Error(errMsg || 'Failed to setup GitHub workflow file.');
+        } catch (e) {
+          console.warn("Error checking for existing workflow file:", e);
         }
 
-        const wfData = await wfResp.json();
+        addLog('Committing new workflow template to GitHub...', 'info');
+        const base64Content = btoa(unescape(encodeURIComponent(workflowYml)));
+        const putBody = {
+          message: '[Platform] Setup 24x7 Continuous Bot Runner Workflow',
+          content: base64Content,
+          ...(sha && { sha })
+        };
+
+        const putResp = await fetch(checkUrl, {
+          method: 'PUT',
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(putBody)
+        });
+
+        if (putResp.status !== 200 && putResp.status !== 201) {
+          const text = await putResp.text();
+          if (putResp.status === 403) {
+            throw new Error(`Repository Workflow Read/Write Restriction: ${text}`);
+          }
+          throw new Error(`Failed to commit workflow: ${text}`);
+        }
+
+        const putData = await putResp.json();
         updateStage('workflow', 'success');
         addLog('Successfully committed .github/workflows/mbhp_bot.yml to the main branch.', 'success');
-        addLog(`Commit SHA: ${wfData.commit_sha || 'N/A'}`, 'info');
+        addLog(`Commit SHA: ${putData.commit?.sha || 'N/A'}`, 'info');
 
         // 2. Encrypt & commit secrets (BOT_TOKEN and other keys)
         updateStage('secrets', 'running');
-        addLog('Initializing tweetnacl-based public-key encryption layer...', 'info');
+        addLog('Initializing libsodium-wrappers secure encryption layer...', 'info');
         await new Promise((r) => setTimeout(r, 500));
 
         // Prepare secrets list
@@ -143,35 +217,45 @@ export default function DeploymentConsole({
         if (secretsToSet.length > 0) {
           addLog(`Queued ${secretsToSet.length} secrets for encryption and remote repository binding...`, 'info');
           
+          // Fetch repository public key once
+          const pubKeyResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/secrets/public-key`, { headers });
+          if (!pubKeyResp.ok) {
+            const text = await pubKeyResp.text();
+            throw new Error(`Failed to fetch public key for repository secrets: ${text}`);
+          }
+          const pubKeyData = await pubKeyResp.json();
+          const { key_id, key: publicKeyBase64 } = pubKeyData;
+
+          // Prepare libsodium
+          await sodium.ready;
+          const binkey = sodium.from_base64(publicKeyBase64, sodium.base64_variants.ORIGINAL);
+
           for (const sec of secretsToSet) {
             addLog(`Encrypting secret: ${sec.key}...`, 'info');
-            const secResp = await fetch(new URL('/api/secrets/set', window.location.href).href, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+            
+            const binsec = sodium.from_string(sec.value);
+            const encBytes = sodium.crypto_box_seal(binsec, binkey);
+            const encrypted_value = sodium.to_base64(encBytes, sodium.base64_variants.ORIGINAL);
+
+            const secUrl = `https://api.github.com/repos/${owner}/${repo}/actions/secrets/${sec.key}`;
+            const secResp = await fetch(secUrl, {
+              method: 'PUT',
+              headers: {
+                ...headers,
+                'Content-Type': 'application/json',
+              },
               body: JSON.stringify({
-                repo_name: repoName,
-                github_token: githubToken,
-                secret_name: sec.key,
-                secret_value: sec.value
+                encrypted_value,
+                key_id,
               })
             });
 
-            if (!secResp.ok) {
-              let errMsg = '';
-              try {
-                const secErrData = await secResp.json();
-                errMsg = secErrData.error || secErrData.message || JSON.stringify(secErrData);
-              } catch {
-                try {
-                  errMsg = await secResp.text();
-                } catch {
-                  errMsg = `HTTP error ${secResp.status}`;
-                }
-              }
-              throw new Error(errMsg || `Failed to encrypt and save secret ${sec.key}`);
+            if (secResp.status !== 201 && secResp.status !== 204) {
+              const text = await secResp.text();
+              throw new Error(`Failed to save secret ${sec.key}: ${text}`);
             }
             addLog(`Secret ${sec.key} securely bound to repository secrets context.`, 'success');
-            await new Promise((r) => setTimeout(r, 300));
+            await new Promise((r) => setTimeout(r, 200));
           }
         } else {
           addLog('No repository secrets configured. Skipping encryption stage.', 'info');
@@ -180,38 +264,17 @@ export default function DeploymentConsole({
         updateStage('secrets', 'success');
         addLog('All environment variables and credentials secured on GitHub Secrets API.', 'success');
 
-        // 3. Register project to multi-bot platform database
+        // 3. Register project to multi-bot platform database (local tracking only)
         updateStage('register', 'running');
         addLog('Registering repository reference in system cluster state...', 'info');
         await new Promise((r) => setTimeout(r, 600));
 
-        const regResp = await fetch(new URL('/api/projects', window.location.href).href, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            repo_name: repoName,
-            github_token: githubToken,
-            script_name: scriptName || 'python main.py',
-            username: repoName.split('/')[1] || 'telegram_bot'
-          })
-        });
+        const projectData = {
+          repo_name: repoName,
+          script_name: scriptName || 'python main.py',
+          created_at: new Date().toISOString()
+        };
 
-        if (!regResp.ok) {
-          let errMsg = '';
-          try {
-            const regErrData = await regResp.json();
-            errMsg = regErrData.error || regErrData.message || JSON.stringify(regErrData);
-          } catch {
-            try {
-              errMsg = await regResp.text();
-            } catch {
-              errMsg = `HTTP error ${regResp.status}`;
-            }
-          }
-          throw new Error(errMsg || 'Failed to register bot project in system state.');
-        }
-
-        const projectData = await regResp.json();
         updateStage('register', 'success');
         addLog(`Registered bot node: ${repoName} in local state.`, 'success');
 
@@ -220,28 +283,47 @@ export default function DeploymentConsole({
         addLog('Dispatching start trigger to GitHub Actions API gateway...', 'info');
         await new Promise((r) => setTimeout(r, 600));
 
-        const startResp = await fetch(new URL('/api/workflow/start', window.location.href).href, {
+        const dispatchUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/mbhp_bot.yml/dispatches`;
+        const startResp = await fetch(dispatchUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
-            repo_name: repoName,
-            github_token: githubToken
+            ref: 'main', // Default branch to dispatch
           })
         });
 
-        if (!startResp.ok) {
-          let errMsg = '';
-          try {
-            const startErr = await startResp.json();
-            errMsg = startErr.error || startErr.message || JSON.stringify(startErr);
-          } catch {
-            try {
-              errMsg = await startResp.text();
-            } catch {
-              errMsg = `HTTP error ${startResp.status}`;
+        // Fallback to bot.yml if mbhp_bot.yml doesn't dispatch instantly or is not visible yet
+        if (startResp.status !== 204) {
+          addLog('Direct mbhp_bot.yml dispatch missed, trying master/dev branches...', 'warning');
+          const branchesToCheck = ['master', 'dev'];
+          let success = false;
+          for (const br of branchesToCheck) {
+            const retryResp = await fetch(dispatchUrl, {
+              method: 'POST',
+              headers: { ...headers, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ref: br })
+            });
+            if (retryResp.status === 204) {
+              success = true;
+              break;
             }
           }
-          throw new Error(errMsg || 'Failed to trigger starting workflow run on GitHub.');
+
+          if (!success) {
+            const fallbackUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/bot.yml/dispatches`;
+            const fbResp = await fetch(fallbackUrl, {
+              method: 'POST',
+              headers: { ...headers, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ref: 'main' })
+            });
+            if (fbResp.status !== 204) {
+              const text = await fbResp.text();
+              throw new Error(`Workflow run dispatch rejected by GitHub: ${text}`);
+            }
+          }
         }
 
         updateStage('launch', 'success');
@@ -396,7 +478,7 @@ export default function DeploymentConsole({
                 </div>
               </div>
             ) : (
-              <p className="text-[11px] text-[#4A6080] leading-relaxed">
+              <p className="text-[11px] text-[#4A6080] leading-relaxed text-left">
                 {deployError} Please verify that your GitHub Token is correct and has the necessary permissions (<code className="text-rose-400">repo</code> and <code className="text-rose-400">workflow</code> scopes) to configure workflows and secure secrets on your repository.
               </p>
             )}

@@ -84,7 +84,7 @@ export default function ProjectConfigForm({
             required
             value={projectName}
             onChange={(e) => setProjectName(e.target.value)}
-            className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#00D4FF] focus:ring-1 focus:ring-[#00D4FF] rounded-xl px-4 py-3 text-xs text-[#F0F6FF] outline-none transition-all font-mono"
+            className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#00D4FF] focus:ring-1 focus:ring-[#00D4FF] rounded-xl px-4 h-12 sm:h-11 py-3 text-base sm:text-xs text-[#F0F6FF] outline-none transition-all font-mono"
             placeholder="my-cool-bot"
           />
         </div>
@@ -100,7 +100,7 @@ export default function ProjectConfigForm({
             required
             value={selectedScript}
             onChange={(e) => setSelectedScript(e.target.value)}
-            className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] rounded-xl px-4 py-3 text-xs text-[#F0F6FF] font-mono outline-none transition-all"
+            className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] rounded-xl px-4 h-12 sm:h-11 py-3 text-base sm:text-xs text-[#F0F6FF] font-mono outline-none transition-all"
             placeholder="python bot.py"
           />
           <p className="text-[10px] text-[#4A6080] leading-relaxed">
@@ -136,7 +136,7 @@ export default function ProjectConfigForm({
                 type={showToken ? 'text' : 'password'}
                 value={botToken}
                 onChange={(e) => setBotToken(e.target.value)}
-                className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#00D4FF] focus:ring-1 focus:ring-[#00D4FF] rounded-xl pl-4 pr-12 py-3 text-xs text-[#F0F6FF] font-mono outline-none transition-all placeholder:text-[#4A6080]"
+                className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#00D4FF] focus:ring-1 focus:ring-[#00D4FF] rounded-xl pl-4 pr-12 h-12 sm:h-11 py-3 text-base sm:text-xs text-[#F0F6FF] font-mono outline-none transition-all placeholder:text-[#4A6080]"
                 placeholder="1234567890:ABCDefGhIJKlmNoPQRsTUVwxyZ... (Optional)"
               />
               <button
@@ -179,20 +179,20 @@ export default function ProjectConfigForm({
             )}
 
             {/* Secret Adder */}
-            <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 border-t border-[#00D4FF]/5">
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 border-t border-[#00D4FF]/5 w-full">
               <input
                 type="text"
                 placeholder="SECRET_NAME"
                 value={newKey}
                 onChange={(e) => setNewKey(e.target.value)}
-                className="w-full sm:flex-1 bg-[#050B18] border border-[#00D4FF]/10 rounded-lg px-3 py-2 font-mono text-[11px] text-white outline-none focus:border-[#00D4FF] transition-all uppercase placeholder:text-[#4A6080]"
+                className="w-full sm:flex-1 bg-[#050B18] border border-[#00D4FF]/10 rounded-xl px-4 h-12 sm:h-11 py-3 text-base sm:text-xs font-mono text-white outline-none focus:border-[#00D4FF] transition-all uppercase placeholder:text-[#4A6080]"
               />
               <input
                 type="password"
                 placeholder="Enter secret value"
                 value={newValue}
                 onChange={(e) => setNewValue(e.target.value)}
-                className="w-full sm:flex-1 bg-[#050B18] border border-[#00D4FF]/10 rounded-lg px-3 py-2 font-mono text-[11px] text-white outline-none focus:border-[#00D4FF] transition-all placeholder:text-[#4A6080]"
+                className="w-full sm:flex-1 bg-[#050B18] border border-[#00D4FF]/10 rounded-xl px-4 h-12 sm:h-11 py-3 text-base sm:text-xs font-mono text-white outline-none focus:border-[#00D4FF] transition-all placeholder:text-[#4A6080]"
               />
               <button
                 type="button"

@@ -1,373 +1,460 @@
-import React, { useState } from 'react';
-import { Github, Key, User, Shield, ShieldAlert, Sparkles, Volume2, VolumeX, Terminal, Cpu } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Key, Eye, EyeOff, Info, ShieldCheck, Lock, ChevronDown, ChevronUp, Volume2, VolumeX, Sparkles, Bot, Github, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { audio } from '../utils/audio';
 
 interface LoginScreenProps {
-  onConnectGitHub: () => Promise<void>;
-  onSaveManualToken: (token: string) => void;
+  onSaveManualToken: (token: string, userData: any) => void;
   isMuted: boolean;
   onToggleMute: () => void;
 }
 
+function ParticleBackground() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+
+    const particles: { x: number; y: number; vx: number; vy: number; size: number; color: string }[] = [];
+    const colors = ['rgba(0, 212, 255, 0.12)', 'rgba(124, 58, 237, 0.08)', 'rgba(255, 59, 107, 0.06)'];
+
+    for (let i = 0; i < 45; i++) {
+      particles.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        size: Math.random() * 2 + 1,
+        color: colors[Math.floor(Math.random() * colors.length)],
+      });
+    }
+
+    const handleResize = () => {
+      if (!canvas) return;
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      for (let i = 0; i < particles.length; i++) {
+        const p1 = particles[i];
+        p1.x += p1.vx;
+        p1.y += p1.vy;
+
+        if (p1.x < 0 || p1.x > width) p1.vx *= -1;
+        if (p1.y < 0 || p1.y > height) p1.vy *= -1;
+
+        ctx.beginPath();
+        ctx.arc(p1.x, p1.y, p1.size, 0, Math.PI * 2);
+        ctx.fillStyle = p1.color;
+        ctx.fill();
+
+        for (let j = i + 1; j < particles.length; j++) {
+          const p2 = particles[j];
+          const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+          if (dist < 130) {
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = `rgba(0, 212, 255, ${0.04 * (1 - dist / 130)})`;
+            ctx.lineWidth = 0.7;
+            ctx.stroke();
+          }
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  return <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-0" />;
+}
+
 export default function LoginScreen({
-  onConnectGitHub,
   onSaveManualToken,
   isMuted,
   onToggleMute,
 }: LoginScreenProps) {
-  const [authMethod, setAuthMethod] = useState<'oauth' | 'pat'>('oauth');
-  const [username, setUsername] = useState('');
   const [pat, setPat] = useState('');
-  const [error, setError] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+  const [showToken, setShowToken] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
-  const [isOAuthLoading, setIsOAuthLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<'401' | '403' | 'network' | null>(null);
+  const [isShaking, setIsShaking] = useState(false);
+  const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(false);
 
-  const handleOAuthClick = async () => {
-    audio.playClick();
-    setError('');
-    setIsOAuthLoading(true);
-    try {
-      await onConnectGitHub();
-    } catch (err: any) {
-      console.error('OAuth initiation error:', err);
-      setError(err.message || 'Failed to initiate GitHub OAuth.');
-    } finally {
-      setIsOAuthLoading(false);
-    }
+  const handleFocus = () => {
+    setIsFocused(true);
   };
 
-  const handleManualSubmit = async (e: React.FormEvent) => {
+  const handleBlur = () => {
+    setIsFocused(false);
+  };
+
+  const handleToggleShowToken = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    audio.playClick();
+    setShowToken(!showToken);
+  };
+
+  // Masking presentation helper: shows first 4 and last 4 characters when blurred, raw value when focused
+  const displayValue = !isFocused && pat.length > 8
+    ? `${pat.slice(0, 4)}••••••••••••${pat.slice(-4)}`
+    : pat;
+
+  // Determine actual password/text field behavior
+  // Mask is bypassable if we are not focused (we explicitly show masked string), or if user toggled eye
+  const inputType = isFocused && !showToken ? 'password' : 'text';
+
+  const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
     audio.playClick();
-    setError('');
+    setError(null);
+    setErrorType(null);
 
-    const trimmedUsername = username.trim();
     const trimmedPat = pat.trim();
 
-    if (!trimmedUsername) {
-      setError('GitHub Username is required.');
-      return;
-    }
     if (!trimmedPat) {
-      setError('Personal Access Token (PAT) is required.');
+      setError('Please enter your GitHub Personal Access Token.');
+      triggerShake();
       return;
     }
 
     setIsValidating(true);
+
     try {
-      // Direct API call to GitHub to validate token credentials
+      // Validate token on GitHub API
       const response = await fetch('https://api.github.com/user', {
         headers: {
-          'Authorization': `token ${trimmedPat}`,
+          'Authorization': `Bearer ${trimmedPat}`,
           'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'telegram-bot-backend-onboarding',
         },
       });
 
-      if (!response.ok) {
-        throw new Error('Access denied. Please check that your PAT is valid and has proper scopes.');
-      }
+      if (response.status === 200) {
+        const userData = await response.json();
+        
+        // Retrieve and parse X-OAuth-Scopes to verify permissions
+        const scopesHeader = response.headers.get('X-OAuth-Scopes');
+        if (scopesHeader !== null) {
+          const scopes = scopesHeader.split(',').map((s) => s.trim().toLowerCase());
+          const hasRepo = scopes.includes('repo');
+          const hasWorkflow = scopes.includes('workflow');
+          const hasReadUser = scopes.includes('read:user') || scopes.includes('user');
 
-      const userData = await response.json();
-      if (userData.login.toLowerCase() !== trimmedUsername.toLowerCase()) {
-        throw new Error(`Credential mismatch: Token is registered to "${userData.login}", but you entered "${trimmedUsername}".`);
-      }
+          if (!hasRepo || !hasWorkflow || !hasReadUser) {
+            setError('Token missing required permissions. Please regenerate with repo + workflow + read:user scopes.');
+            setErrorType('403');
+            triggerShake();
+            setIsValidating(false);
+            return;
+          }
+        }
 
-      // Successful manual authentication
-      audio.playSuccess();
-      onSaveManualToken(trimmedPat);
-    } catch (err: any) {
-      console.error('Manual token authentication error:', err);
-      setError(err.message || 'Authentication failed. Please verify your token scopes (repo, workflow).');
+        audio.playSuccess();
+        onSaveManualToken(trimmedPat, userData);
+      } else if (response.status === 401) {
+        setError('Invalid token. Please check and try again.');
+        setErrorType('401');
+        triggerShake();
+      } else if (response.status === 403) {
+        setError('Token missing required permissions. Please regenerate with repo + workflow + read:user scopes.');
+        setErrorType('403');
+        triggerShake();
+      } else {
+        setError(`Validation failed: Server returned HTTP ${response.status}`);
+        triggerShake();
+      }
+    } catch (err) {
+      console.error('Validation network error:', err);
+      setError('Connection failed. Check your internet and try again.');
+      setErrorType('network');
+      triggerShake();
     } finally {
       setIsValidating(false);
     }
   };
 
+  const triggerShake = () => {
+    audio.playError();
+    setIsShaking(true);
+    setTimeout(() => setIsShaking(false), 500);
+  };
+
   return (
-    <div className="min-h-screen bg-[#050B18] text-[#F0F6FF] font-sans overflow-hidden relative flex flex-col justify-between p-6 selection:bg-[#00D4FF]/30 selection:text-[#00D4FF]">
-      {/* Background Noise and Cosmic Radial Atmospheres */}
-      <div className="noise-overlay" />
+    <div className="min-h-screen bg-[#050B18] text-[#F0F6FF] font-sans relative flex flex-col justify-center items-center py-8 px-4 overflow-y-auto selection:bg-[#00D4FF]/30 selection:text-[#00D4FF] select-none">
       
-      {/* Glowing colorful nebulas */}
-      <div className="absolute top-[10%] right-[5%] w-[500px] h-[500px] bg-cyan-500/5 blur-[120px] rounded-full animate-pulse pointer-events-none" />
-      <div className="absolute bottom-[15%] left-[2%] w-[600px] h-[600px] bg-purple-500/3 blur-[140px] rounded-full animate-pulse pointer-events-none" style={{ animationDelay: '3s' }} />
-      <div className="absolute top-[60%] right-[10%] w-[450px] h-[450px] bg-pink-500/3 blur-[120px] rounded-full animate-pulse pointer-events-none" style={{ animationDelay: '1.5s' }} />
+      {/* Interactive visual canvas in the background */}
+      <ParticleBackground />
 
-      {/* Retro perspective grid background */}
-      <div className="perspective-container opacity-30">
-        <div className="perspective-grid opacity-20" />
-      </div>
+      {/* Decorative atmospherics */}
+      <div className="noise-overlay pointer-events-none" />
+      <div className="absolute top-[15%] right-[8%] w-[350px] h-[350px] bg-cyan-500/5 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-[20%] left-[5%] w-[400px] h-[400px] bg-purple-500/3 blur-[120px] rounded-full pointer-events-none" />
 
-      {/* Header with Applet branding */}
-      <header className="relative z-10 flex justify-between items-center max-w-6xl w-full mx-auto">
-        <div className="flex items-center gap-2.5">
-          <div className="relative w-8 h-8 flex items-center justify-center">
-            {/* Rotating inner dash ring */}
-            <div className="absolute inset-0 rounded-full border border-dashed border-[#00D4FF]/30 animate-rotate-slow"></div>
-            {/* Hexagonal logo */}
-            <svg className="w-5 h-5 text-[#00D4FF]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polygon points="12 2 22 7.5 22 18.5 12 24 2 18.5 2 7.5" />
-            </svg>
-          </div>
-          <span className="font-display font-extrabold text-xs tracking-widest text-[#F0F6FF]">
-            MULTI-BOT ENGINE
-          </span>
-        </div>
-
-        {/* Audio/Mute feedback control */}
+      {/* Floating System Mute Controls (Top Right) */}
+      <div className="absolute top-6 right-6 z-20">
         <button
           type="button"
           onClick={() => {
             audio.playClick();
             onToggleMute();
           }}
-          className="p-2 rounded-full border border-[#00D4FF]/10 bg-[#0A1628]/40 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/30 transition-all cursor-pointer flex items-center justify-center"
-          title={isMuted ? "Unmute sound effects" : "Mute sound effects"}
+          className="p-2.5 rounded-full border border-[#00D4FF]/10 bg-[#0A1628]/45 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/30 transition-all cursor-pointer flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.4)]"
+          title={isMuted ? "Unmute system sounds" : "Mute system sounds"}
         >
           {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
         </button>
-      </header>
+      </div>
 
-      {/* Centered Premium Login Container */}
-      <main className="relative z-10 flex-1 flex items-center justify-center py-12">
-        <div className="max-w-[1000px] w-full grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          
-          {/* Left Hero Column */}
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8 }}
-            className="lg:col-span-6 space-y-6 text-left hidden lg:block"
-          >
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#00D4FF]/8 border border-[#00D4FF]/15 rounded-full text-[10px] font-mono tracking-widest text-[#00D4FF] shadow-[0_0_15px_rgba(0,212,255,0.06)]">
-              <Shield className="w-3.5 h-3.5 text-[#00D4FF]" />
-              AUTHENTICATION & PROVISIONING STAGE
-            </div>
-
-            <h1 className="text-4xl lg:text-5xl font-display font-extrabold tracking-tight text-white leading-tight">
-              Access the <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4FF] via-[#7C3AED] to-[#FF3B6B]">
-                Dashboard Terminal
-              </span>
+      {/* Main Glassmorphic Form Card Wrapper */}
+      <div className="w-full max-w-[420px] relative z-10 flex flex-col items-center">
+        
+        {/* App Logo & Brand Header */}
+        <div className="flex flex-col items-center text-center gap-2.5 mb-6">
+          <div className="relative w-11 h-11 flex items-center justify-center">
+            {/* Pulsing visual circles */}
+            <div className="absolute inset-0 rounded-full border border-dashed border-[#00D4FF]/35 animate-rotate-slow"></div>
+            <div className="absolute inset-1.5 bg-[#00D4FF]/5 rounded-full animate-ping opacity-20" />
+            <Bot className="w-5.5 h-5.5 text-[#00D4FF]" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="font-display font-extrabold text-[15px] tracking-[0.16em] text-white uppercase">
+              MULTI-BOT DASHBOARD
             </h1>
-
-            <p className="text-xs text-[#4A6080] font-sans leading-relaxed max-w-md">
-              Securely authenticate with your GitHub workspace credentials to orchestrate workflow dispatch engines, synchronize multi-agent Telegram microservices, and deploy real-time routing bots in 24x7 automated runner nodes.
+            <p className="text-[10px] text-[#4A6080] font-mono tracking-widest uppercase">
+              // Continuous Execution Engine
             </p>
+          </div>
+        </div>
 
-            <div className="flex gap-4 items-center">
-              <div className="flex -space-x-2">
-                <div className="w-7 h-7 rounded-full bg-[#030812] border border-[#00D4FF]/30 flex items-center justify-center text-[10px] font-mono font-bold text-[#00D4FF]">G</div>
-                <div className="w-7 h-7 rounded-full bg-[#030812] border border-[#7C3AED]/30 flex items-center justify-center text-[10px] font-mono font-bold text-[#7C3AED]">T</div>
-                <div className="w-7 h-7 rounded-full bg-[#030812] border border-emerald-500/30 flex items-center justify-center text-[10px] font-mono font-bold text-emerald-400">R</div>
+        {/* The Connection Card */}
+        <motion.div
+          layout
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="w-full premium-glass-card rounded-2xl p-5 sm:p-8 border border-[#00D4FF]/15 bg-[#0A1628]/70 shadow-[0_25px_65px_rgba(0,0,0,0.85)] relative overflow-hidden flex flex-col gap-6"
+          id="login-card"
+        >
+          {/* Animated scanner scanning laser line */}
+          <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#00D4FF]/55 to-transparent animate-pulse"></div>
+
+          <div className="space-y-1">
+            <h2 className="text-[14px] font-display font-extrabold text-[#F0F6FF] uppercase tracking-wider">
+              Secure PAT Authentication
+            </h2>
+            <p className="text-[11px] text-[#4A6080] font-sans">
+              Enter a Personal Access Token to grant safe local-only browser synchronization.
+            </p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleConnect} className="space-y-4">
+            
+            {/* Custom Interactive Token Input */}
+            <motion.div
+              animate={isShaking ? { x: [-10, 10, -10, 10, -5, 5, 0] } : {}}
+              transition={{ duration: 0.4 }}
+              className={`relative flex flex-col gap-1.5 rounded-xl border bg-[#030812]/90 px-3.5 py-2 transition-all ${
+                isFocused 
+                  ? 'border-[#00D4FF] shadow-[0_0_15px_rgba(0,212,255,0.08)]' 
+                  : error 
+                  ? 'border-rose-500/40' 
+                  : 'border-[#00D4FF]/15'
+              }`}
+            >
+              <div className="flex justify-between items-center text-[9px] font-mono tracking-wider uppercase">
+                <span className={isFocused ? 'text-[#00D4FF]' : 'text-[#4A6080]'}>// GITHUB PAT TOKEN</span>
+                <span className="text-[#4A6080]">SECURE ENCRYPTED</span>
               </div>
-              <span className="text-[10px] text-[#4A6080] font-mono">
-                Encrypted handshakes via official GitHub APIs.
+
+              <div className="flex items-center gap-2">
+                <Key className={`w-4 h-4 shrink-0 transition-colors ${isFocused ? 'text-[#00D4FF]' : 'text-[#4A6080]'}`} />
+                <input
+                  type={inputType}
+                  placeholder="Paste GitHub Token (ghp_...)"
+                  value={displayValue}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    // If focused, update the underlying token state
+                    if (isFocused) {
+                      setPat(val);
+                    }
+                  }}
+                  onFocus={handleFocus}
+                  onBlur={handleBlur}
+                  className="w-full h-11 bg-transparent border-none outline-none font-mono text-[16px] text-white placeholder-neutral-600 tracking-wide"
+                  style={{ fontSize: '16px' }} // Explicitly prevent iOS auto-zoom
+                  id="pat-token-input"
+                />
+
+                {/* Show/Hide eye toggles */}
+                {pat && (
+                  <button
+                    type="button"
+                    onClick={handleToggleShowToken}
+                    className="p-1.5 rounded-lg text-[#4A6080] hover:text-[#00D4FF] hover:bg-white/5 transition-all cursor-pointer flex items-center justify-center shrink-0 min-w-[44px] min-h-[44px]"
+                  >
+                    {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+
+            {/* Inline Error Displays */}
+            <AnimatePresence mode="wait">
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  className="p-3 rounded-lg border border-rose-500/15 bg-rose-500/5 text-rose-400 text-[11px] leading-relaxed font-sans flex items-start gap-2 text-left"
+                >
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                  <div className="space-y-1">
+                    <p className="font-bold uppercase text-[9px] tracking-wider text-rose-400">
+                      {errorType === '403' ? 'PERMISSION DENIED' : errorType === '401' ? 'AUTHENTICATION FAULT' : 'CONNECTION ERROR'}
+                    </p>
+                    <p className="text-neutral-300 font-sans">{error}</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* CONNECT & LOGIN BUTTON */}
+            <button
+              type="submit"
+              disabled={isValidating}
+              className="w-full h-[52px] rounded-xl font-display font-extrabold text-xs tracking-widest uppercase transition-all bg-[#00D4FF] text-[#050B18] hover:bg-[#00D4FF]/95 hover:shadow-[0_0_20px_rgba(0,212,255,0.25)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed min-h-[44px]"
+              id="connect-login-btn"
+            >
+              {isValidating ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-[#050B18]" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  VALIDATING TOKEN...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  CONNECT & LOGIN
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* GENERATE TOKEN LINK */}
+          <div className="space-y-3 pt-2 border-t border-[#00D4FF]/10 text-center">
+            <span className="text-[10px] text-[#4A6080] font-sans block">
+              Don't have a token? Generate one instantly:
+            </span>
+            
+            <a
+              href="https://github.com/settings/tokens/new?description=MBHP-Bot-Token&scopes=repo,workflow,read:user"
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => audio.playClick()}
+              className="w-full h-11 rounded-xl border border-[#00D4FF]/30 text-[#00D4FF] hover:bg-[#00D4FF]/5 font-display font-extrabold text-[10px] tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer select-text shrink-0 min-h-[44px]"
+              id="generate-token-link"
+            >
+              <Github className="w-3.5 h-3.5" />
+              Generate Token on GitHub
+            </a>
+
+            {/* Permission pills below token button */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1.5">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[9px] font-mono text-neutral-400">
+                <Info className="w-2.5 h-2.5 text-[#00D4FF]" />
+                repo
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[9px] font-mono text-neutral-400">
+                <Info className="w-2.5 h-2.5 text-[#00D4FF]" />
+                workflow
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[9px] font-mono text-neutral-400">
+                <Info className="w-2.5 h-2.5 text-[#00D4FF]" />
+                read:user
               </span>
             </div>
-          </motion.div>
+          </div>
 
-          {/* Right Login Card Column */}
-          <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8 }}
-            className="lg:col-span-6 w-full max-w-md mx-auto"
-          >
-            <div className="premium-glass-card corner-accent-line rounded-2xl p-8 relative overflow-hidden shadow-[0_25px_65px_rgba(0,0,0,0.8)] border border-[#00D4FF]/10">
-              {/* Animated scanning laser line */}
-              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#00D4FF] to-transparent animate-pulse"></div>
+          {/* COLLAPSIBLE INSTRUCTIONS */}
+          <div className="border-t border-[#00D4FF]/10 pt-4 flex flex-col">
+            <button
+              onClick={() => {
+                audio.playClick();
+                setIsInstructionsExpanded(!isInstructionsExpanded);
+              }}
+              className="flex items-center justify-between text-[11px] font-mono tracking-wider uppercase text-[#00D4FF] hover:text-[#00E5FF] transition-colors cursor-pointer select-none"
+              id="instructions-toggle-btn"
+            >
+              <span>// HOW TO GENERATE TOKEN</span>
+              {isInstructionsExpanded ? (
+                <ChevronUp className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5" />
+              )}
+            </button>
 
-              {/* Step indicator tag */}
-              <div className="flex justify-between items-center mb-6">
-                <span className="text-[9px] font-mono tracking-wider text-[#00D4FF] uppercase">// ONBOARDING PATHWAY</span>
-                <span className="text-[9px] font-mono text-[#4A6080] flex items-center gap-1 bg-[#030812]/55 px-2.5 py-1 rounded-md border border-[#00D4FF]/5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00D4FF] animate-pulse"></span>
-                  PHASE 1
-                </span>
-              </div>
-
-              {/* Title Header */}
-              <div className="space-y-1 mb-6 text-center lg:text-left">
-                <h2 className="text-lg font-display font-bold text-[#F0F6FF]">Connect Workspace</h2>
-                <p className="text-xs text-[#4A6080] font-sans">
-                  Choose a login path to authorize GitHub repository sync.
-                </p>
-              </div>
-
-              {/* Tabs for choosing login mode */}
-              <div className="flex p-1 rounded-xl bg-[#030812]/90 border border-[#00D4FF]/10 mb-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    audio.playClick();
-                    setAuthMethod('oauth');
-                    setError('');
-                  }}
-                  className={`flex-1 py-2.5 text-[10px] font-sans font-bold uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    authMethod === 'oauth'
-                      ? 'bg-gradient-to-r from-[#00D4FF]/10 to-[#7C3AED]/10 border border-[#00D4FF]/20 text-[#F0F6FF] shadow-inner'
-                      : 'text-[#4A6080] hover:text-[#F0F6FF]'
-                  }`}
+            <AnimatePresence initial={false}>
+              {isInstructionsExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
                 >
-                  <Shield className="w-3.5 h-3.5 text-[#00D4FF]" />
-                  Secure OAuth
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    audio.playClick();
-                    setAuthMethod('pat');
-                    setError('');
-                  }}
-                  className={`flex-1 py-2.5 text-[10px] font-sans font-bold uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    authMethod === 'pat'
-                      ? 'bg-gradient-to-r from-[#00D4FF]/10 to-[#7C3AED]/10 border border-[#00D4FF]/20 text-[#F0F6FF] shadow-inner'
-                      : 'text-[#4A6080] hover:text-[#F0F6FF]'
-                  }`}
-                >
-                  <Key className="w-3.5 h-3.5 text-[#7C3AED]" />
-                  Fallback PAT
-                </button>
-              </div>
+                  <div className="pt-3 text-[11px] text-neutral-400 leading-relaxed space-y-2 select-text font-sans text-left">
+                    <p><strong className="text-[#00D4FF] font-mono">1.</strong> Click <span className="text-white font-semibold">"Generate Token on GitHub"</span> above (log in to GitHub if required).</p>
+                    <p><strong className="text-[#00D4FF] font-mono">2.</strong> Verify the permissions checkbox selections are pre-checked (<code className="text-emerald-400">repo</code>, <code className="text-emerald-400">workflow</code>, <code className="text-emerald-400">read:user</code>).</p>
+                    <p><strong className="text-[#00D4FF] font-mono">3.</strong> Scroll to the bottom and click the green <span className="text-emerald-400 font-semibold">"Generate token"</span> button.</p>
+                    <p><strong className="text-[#00D4FF] font-mono">4.</strong> Copy the generated key starting with <code className="text-white">ghp_...</code> (Important: you will only see this key once!).</p>
+                    <p><strong className="text-[#00D4FF] font-mono">5.</strong> Paste the token into the input field above and tap Connect.</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-              <AnimatePresence mode="wait">
-                {authMethod === 'oauth' ? (
-                  /* OPTION A: OAuth flow */
-                  <motion.div
-                    key="oauth"
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    transition={{ duration: 0.2 }}
-                    className="space-y-6"
-                  >
-                    <div className="py-6 text-center space-y-4">
-                      <div className="w-14 h-14 bg-[#00D4FF]/5 rounded-full flex items-center justify-center mx-auto border border-[#00D4FF]/20">
-                        <Github className="w-7 h-7 text-[#00D4FF]" />
-                      </div>
-                      <p className="text-xs text-[#4A6080] font-sans max-w-xs mx-auto leading-relaxed">
-                        Redirect to GitHub security portal to grant safe read and write access to your workflow orchestrations and bot repositories.
-                      </p>
-                    </div>
+        </motion.div>
 
-                    {error && (
-                      <p className="text-[10px] text-[#FF3B6B] bg-rose-950/15 border border-[#FF3B6B]/25 py-2.5 px-3 rounded-lg flex items-start gap-2 font-sans">
-                        <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        <span>{error}</span>
-                      </p>
-                    )}
+        {/* Security & Local Storage disclaimer below connection card */}
+        <p className="mt-5 text-[10px] text-[#4A6080] font-mono leading-relaxed text-center max-w-sm px-4 select-text">
+          <Lock className="w-3 h-3 text-[#00D4FF] inline mr-1.5 -mt-0.5" />
+          Your token is stored locally on your device only. We never send it to any server. All GitHub API calls are made directly from your browser.
+        </p>
 
-                    <button
-                      onClick={handleOAuthClick}
-                      disabled={isOAuthLoading}
-                      className="w-full py-4 rounded-xl text-xs font-bold font-sans uppercase tracking-wider bg-gradient-to-r from-[#00D4FF] to-[#7C3AED] hover:from-[#00E5FF] hover:to-[#8B5CF6] text-white flex items-center justify-center gap-2 shadow-lg shadow-[#00D4FF]/15 cursor-pointer hover:scale-[1.01] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isOAuthLoading ? (
-                        <>
-                          <span className="spinning-arc-loader"></span>
-                          INITIATING HANDSHAKE...
-                        </>
-                      ) : (
-                        <>
-                          <Github className="w-4 h-4" />
-                          Continue with GitHub OAuth
-                        </>
-                      )}
-                    </button>
+      </div>
 
-                  </motion.div>
-                ) : (
-                  /* OPTION B: Manual fallback Personal Access Token */
-                  <motion.form
-                    key="pat"
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    transition={{ duration: 0.2 }}
-                    onSubmit={handleManualSubmit}
-                    className="space-y-5"
-                  >
-                    {/* GitHub Username Input */}
-                    <div className="floating-label-group">
-                      <input
-                        type="text"
-                        id="login_username"
-                        placeholder=" "
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        className="bottom-border-input font-mono text-xs"
-                      />
-                      <label htmlFor="login_username" className="floating-label font-sans flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5 text-[#00D4FF]" /> GitHub Username
-                      </label>
-                      <span className="focus-underline"></span>
-                    </div>
-
-                    {/* GitHub PAT Input */}
-                    <div className="floating-label-group">
-                      <input
-                        type="password"
-                        id="login_pat"
-                        placeholder=" "
-                        value={pat}
-                        onChange={(e) => setPat(e.target.value)}
-                        className="bottom-border-input font-mono text-xs"
-                      />
-                      <label htmlFor="login_pat" className="floating-label font-sans flex items-center gap-1.5">
-                        <Key className="w-3.5 h-3.5 text-[#7C3AED]" /> Personal Access Token (PAT)
-                      </label>
-                      <span className="focus-underline"></span>
-                    </div>
-
-                    {error && (
-                      <p className="text-[10px] text-[#FF3B6B] bg-rose-950/15 border border-[#FF3B6B]/25 py-2.5 px-3 rounded-lg flex items-start gap-2 font-sans">
-                        <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        <span>{error}</span>
-                      </p>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={isValidating}
-                      className="w-full py-4 rounded-xl text-xs font-bold font-sans uppercase tracking-wider bg-gradient-to-r from-[#7C3AED] to-[#FF3B6B] hover:from-[#8B5CF6] hover:to-[#FF5E89] text-white flex items-center justify-center gap-2 shadow-lg shadow-[#7C3AED]/15 cursor-pointer hover:scale-[1.01] transition-all"
-                    >
-                      {isValidating ? (
-                        <>
-                          <span className="spinning-arc-loader"></span>
-                          VERIFYING INTEGRITY CREDENTIALS...
-                        </>
-                      ) : (
-                        <>
-                          <Terminal className="w-4 h-4" />
-                          Verify & Inject Token
-                        </>
-                      )}
-                    </button>
-                  </motion.form>
-                )}
-              </AnimatePresence>
-
-              {/* Secure note */}
-              <div className="mt-6 flex items-center gap-2 justify-center text-[10px] font-mono text-[#4A6080]">
-                <Cpu className="w-3 h-3 text-[#00D4FF]" />
-                <span>Zero login passwords are required.</span>
-              </div>
-            </div>
-          </motion.div>
-
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="relative z-10 max-w-6xl w-full mx-auto text-center border-t border-[#00D4FF]/5 pt-4 text-[10px] text-[#4A6080] font-mono flex flex-col sm:flex-row sm:justify-between items-center gap-2">
-        <span>© 2026 MULTI-BOT PLATFORM INC. RUNNERS DEPLOYED 24x7</span>
-        <span className="text-[#00D4FF]/60 flex items-center gap-1.5">
-          <Sparkles className="w-3 h-3" /> SECURED BY ENCRYPTED TELEGRAM WEBHOOK BRIDGE
-        </span>
+      {/* Decorative Branding Footer */}
+      <footer className="mt-8 relative z-10 text-[10px] text-[#4A6080] font-mono text-center border-t border-neutral-900 w-full max-w-[420px] pt-4 select-text">
+        <span>© 2026 MULTI-BOT HOSTING PLATFORM</span>
       </footer>
+
     </div>
   );
 }

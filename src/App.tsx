@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import OAuthCallback from './components/OAuthCallback';
+import sodium from 'libsodium-wrappers';
 import LoginScreen from './components/LoginScreen';
 import {
   Cpu,
@@ -40,7 +40,7 @@ import LoadingScreen from './components/LoadingScreen';
 import NewProjectModal from './components/NewProjectModal';
 import LogsViewer from './components/LogsViewer';
 import { audio } from './utils/audio';
-import { Project } from './types';
+import { Project, SavedBot } from './types';
 import { use3DTilt } from './hooks/use3DTilt';
 
 interface AnimatedCounterProps {
@@ -104,263 +104,158 @@ function AddProjectCard({ onClick }: AddProjectCardProps) {
   );
 }
 
-interface ProjectCardProps {
-  project: Project;
-  botActionLoading: string | null;
-  activeSecretsProject: string | null;
-  setActiveSecretsProject: React.Dispatch<React.SetStateAction<string | null>>;
-  setActiveLogsProject: React.Dispatch<React.SetStateAction<string | null>>;
-  handleStopBot: (repoName: string) => void;
-  handleStartBot: (repoName: string) => void;
-  handleRestartBot: (repoName: string) => void;
-  handleDeleteProject: (repoName: string) => void;
-  handleSaveInlineSecret: (repoName: string) => void;
-  inlineSecretKey: string;
-  setInlineSecretKey: React.Dispatch<React.SetStateAction<string>>;
-  inlineSecretValue: string;
-  setInlineSecretValue: React.Dispatch<React.SetStateAction<string>>;
-  isSavingSecret: boolean;
+interface SavedBotCardProps {
+  bot: SavedBot;
+  statusInfo?: {
+    status: 'RUNNING' | 'QUEUED' | 'FAILED' | 'STOPPED' | 'UNKNOWN';
+    lastRunText: string;
+    loading: boolean;
+  };
+  onStop: () => void;
+  onRestart: () => void;
+  onLogs: () => void;
+  onDelete: () => void;
+  actionLoading: 'stopping' | 'starting' | null;
   index: number;
 }
 
-function ProjectCard({
-  project,
-  botActionLoading,
-  activeSecretsProject,
-  setActiveSecretsProject,
-  setActiveLogsProject,
-  handleStopBot,
-  handleStartBot,
-  handleRestartBot,
-  handleDeleteProject,
-  handleSaveInlineSecret,
-  inlineSecretKey,
-  setInlineSecretKey,
-  inlineSecretValue,
-  setInlineSecretValue,
-  isSavingSecret,
+function SavedBotCard({
+  bot,
+  statusInfo,
+  onStop,
+  onRestart,
+  onLogs,
+  onDelete,
+  actionLoading,
   index
-}: ProjectCardProps) {
-  const isOnline = project.status === 'online';
-  const isQueued = project.status === 'queued';
-  const isFailed = project.status === 'failed';
-  const isOffline = project.status === 'offline';
-  const isLoadingAction = botActionLoading === project.repo_name;
-  const isSecretsOpen = activeSecretsProject === project.repo_name;
-
+}: SavedBotCardProps) {
   const tiltRef = use3DTilt(true);
+  const isLoading = statusInfo?.loading ?? true;
+  const status = statusInfo?.status ?? 'UNKNOWN';
+  const lastRunText = statusInfo?.lastRunText ?? 'loading...';
 
-  const getUptimeText = (startedAt: string | undefined) => {
-    if (!isOnline || !startedAt) return 'Offline';
-    const diff = Date.now() - new Date(startedAt).getTime();
-    if (diff <= 0) return 'Just started';
-    const secs = Math.floor(diff / 1000);
-    const mins = Math.floor(secs / 60);
-    const hrs = Math.floor(mins / 60);
-    const days = Math.floor(hrs / 24);
-    
-    if (days > 0) return `${days}d ${hrs % 24}h`;
-    if (hrs > 0) return `${hrs}h ${mins % 60}m`;
-    if (mins > 0) return `${mins}m ${secs % 60}s`;
-    return `${secs}s`;
+  // Get badge colors
+  const getBadgeStyles = () => {
+    switch (status) {
+      case 'RUNNING':
+        return 'bg-[#00FF88]/15 text-[#00FF88] border-[#00FF88]/30';
+      case 'QUEUED':
+        return 'bg-[#FFB800]/15 text-[#FFB800] border-[#FFB800]/30';
+      case 'FAILED':
+        return 'bg-[#FF4444]/15 text-[#FF4444] border-[#FF4444]/30';
+      case 'STOPPED':
+        return 'bg-[#666666]/15 text-neutral-400 border-neutral-700/50';
+      default:
+        return 'bg-[#666666]/5 text-neutral-500 border-neutral-800';
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="premium-glass-card rounded-2xl p-5 border border-[#00D4FF]/10 bg-[#050B18]/40 animate-pulse min-h-[240px] flex flex-col justify-between">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="h-4 bg-white/10 rounded w-1/2" />
+            <div className="h-5 bg-white/10 rounded w-16" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-3 bg-white/5 rounded w-1/3" />
+            <div className="h-3 bg-white/5 rounded w-2/5" />
+          </div>
+        </div>
+        <div className="border-t border-white/5 pt-4 grid grid-cols-3 gap-2">
+          <div className="h-10 bg-white/5 rounded-xl" />
+          <div className="h-10 bg-white/5 rounded-xl" />
+          <div className="h-10 bg-white/5 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       ref={tiltRef}
       style={{ animationDelay: `${index * 80}ms` }}
-      className="animate-card-fade-in premium-glass-card rounded-2xl p-5 border border-[#00D4FF]/10 bg-[#050B18]/40 flex flex-col justify-between min-h-[260px] relative overflow-hidden group hover:border-[#00D4FF]/30 transition-all duration-300"
+      className="animate-card-fade-in premium-glass-card rounded-2xl p-5 border border-[#00D4FF]/15 bg-[#050B18]/50 hover:bg-[#050B18]/70 hover:border-[#00D4FF]/30 transition-all duration-300 flex flex-col justify-between min-h-[240px] relative group shadow-[0_15px_30px_rgba(0,0,0,0.5)]"
     >
-      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#00D4FF]/5 to-transparent rounded-full filter blur-xl pointer-events-none"></div>
+      {/* Delete/untrack hover button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        className="absolute top-4 right-4 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-rose-500/10 text-neutral-500 hover:text-rose-400 transition-all cursor-pointer z-10"
+        title="Untrack Bot"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
 
-      <div className="space-y-4">
-        {/* Header: Name and Status Badge */}
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-mono font-bold text-[#F0F6FF] tracking-wide truncate max-w-[130px]" title={project.repo_name}>
-            {stripEmojis(project.repo_name.split('/')[1] || project.repo_name)}
+      <div>
+        {/* Repo Title & Status Badge */}
+        <div className="flex items-start justify-between gap-2.5 mb-3.5">
+          <span className="font-display font-bold text-[#F0F6FF] text-[13px] tracking-wide truncate max-w-[70%]" title={bot.repoFullName}>
+            {bot.repoFullName}
           </span>
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${
-              isOnline ? 'bg-emerald-400 animate-pulse' :
-              isQueued ? 'bg-cyan-400 animate-pulse' :
-              isFailed ? 'bg-rose-500' : 'bg-slate-500'
-            }`}></span>
-            <span className={`text-[9px] font-mono uppercase font-bold tracking-widest ${
-              isOnline ? 'text-emerald-400' :
-              isQueued ? 'text-cyan-400' :
-              isFailed ? 'text-rose-400' : 'text-[#4A6080]'
-            }`}>
-              {project.status || 'offline'}
-            </span>
-          </div>
+          <span className={`px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-md border shrink-0 ${getBadgeStyles()}`}>
+            {status}
+          </span>
         </div>
 
-        {/* Details Namespace & Branch Link */}
-        <div className="space-y-1">
-          <a
-            href={`https://github.com/${project.repo_name}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs font-mono text-[#4A6080] hover:text-[#00D4FF] transition-all flex items-center gap-1.5"
-          >
-            github.com/{stripEmojis(project.repo_name)}
-            <ExternalLink className="w-3 h-3 text-[#4A6080]" />
-          </a>
-
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <span className="text-[9px] font-mono tracking-widest px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase font-semibold">
-              {project.script_name || 'python main.py'}
-            </span>
-            <span className="text-[9px] font-mono tracking-widest px-2 py-0.5 rounded-full bg-[#00D4FF]/5 text-[#00D4FF] border border-[#00D4FF]/10 uppercase font-semibold">
-              {project.health || 'healthy'}
-            </span>
+        {/* Details section */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+            <Code className="w-3.5 h-3.5 text-[#00D4FF]" />
+            <span className="font-sans font-medium capitalize text-[11px] sm:text-xs">{bot.language} • {bot.entryFile}</span>
           </div>
-        </div>
-
-        {/* Inline Uptime */}
-        <div className="pt-3 border-t border-[#00D4FF]/5 grid grid-cols-2 gap-2 font-mono text-[10px]">
-          <div>
-            <span className="text-[#4A6080] block">TRIGGER LOAD</span>
-            <span className="text-white font-bold">{project.request_count || 0} hits</span>
-          </div>
-          <div>
-            <span className="text-[#4A6080] block">ACTIVE UPTIME</span>
-            <span className={`font-bold ${isOnline ? 'text-emerald-400' : 'text-[#4A6080]'}`}>
-              {getUptimeText(project.started_at)}
-            </span>
+          <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+            <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />
+            <span className="font-mono text-[10px] sm:text-[11px] text-neutral-500">Last run: {lastRunText}</span>
           </div>
         </div>
       </div>
 
-      {/* Collapsible inline Secrets Form */}
-      {isSecretsOpen && (
-        <div className="mt-4 pt-3 border-t border-[#00D4FF]/10 bg-[#050B18]/60 p-3 rounded-xl space-y-2.5 text-left">
-          <span className="text-[9px] font-mono text-[#00D4FF] uppercase tracking-wider block font-bold">
-            Configure Secret Key
-          </span>
-          <div className="space-y-2">
-            <input
-              type="text"
-              placeholder="SECRET_KEY_NAME"
-              value={inlineSecretKey}
-              onChange={(e) => setInlineSecretKey(e.target.value.toUpperCase())}
-              className="w-full bg-[#050B18] border border-[#00D4FF]/10 rounded-lg px-2.5 py-1 text-[10px] font-mono text-white outline-none focus:border-[#00D4FF] placeholder:text-[#4A6080]"
-            />
-            <input
-              type="password"
-              placeholder="Enter secret value"
-              value={inlineSecretValue}
-              onChange={(e) => setInlineSecretValue(e.target.value)}
-              className="w-full bg-[#050B18] border border-[#00D4FF]/10 rounded-lg px-2.5 py-1 text-[10px] font-mono text-white outline-none focus:border-[#00D4FF] placeholder:text-[#4A6080]"
-            />
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                disabled={isSavingSecret || !inlineSecretKey.trim() || !inlineSecretValue.trim()}
-                onClick={() => handleSaveInlineSecret(project.repo_name)}
-                className="flex-1 py-1.5 rounded-lg bg-[#00D4FF] text-[#050B18] text-[9px] font-mono font-bold uppercase hover:bg-[#00D4FF]/80 transition-all cursor-pointer disabled:opacity-40"
-              >
-                {isSavingSecret ? 'Saving...' : 'Save Secret'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setInlineSecretKey('');
-                  setInlineSecretValue('');
-                  setActiveSecretsProject(null);
-                }}
-                className="px-2.5 py-1.5 rounded-lg border border-[#4A6080]/20 text-[#4A6080] text-[9px] font-mono font-bold uppercase hover:text-white transition-all cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Quick Controls Actions bar */}
-      {!isSecretsOpen && (
-        <div className="space-y-3 pt-4 border-t border-[#00D4FF]/5 mt-4">
-          <div className="flex items-center gap-2">
-            {isOnline ? (
-              <button
-                type="button"
-                onClick={() => handleStopBot(project.repo_name)}
-                disabled={isLoadingAction}
-                className="flex-1 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
-              >
-                {isLoadingAction ? (
-                  <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
-                ) : (
-                  <>
-                    <Power className="w-3 h-3" />
-                    Stop Node
-                  </>
-                )}
-              </button>
+      {/* Control Buttons Container */}
+      <div className="border-t border-[#00D4FF]/5 pt-4 mt-4">
+        <div className="grid grid-cols-3 gap-2.5 w-full">
+          {/* RESTART */}
+          <button
+            onClick={onRestart}
+            disabled={actionLoading !== null}
+            className="h-11 flex items-center justify-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/5 text-cyan-400 hover:bg-cyan-500/15 active:bg-cyan-500/20 disabled:opacity-40 transition-all font-mono text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest cursor-pointer"
+          >
+            {actionLoading === 'starting' ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
             ) : (
-              <button
-                type="button"
-                onClick={() => handleStartBot(project.repo_name)}
-                disabled={isLoadingAction}
-                className="flex-1 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
-              >
-                {isLoadingAction ? (
-                  <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
-                ) : (
-                  <>
-                    <Play className="w-3 h-3 fill-current" />
-                    Start Node
-                  </>
-                )}
-              </button>
+              <Play className="w-3 h-3 text-cyan-400" />
             )}
+            <span>{actionLoading === 'starting' ? 'starting' : 'RESTART'}</span>
+          </button>
 
-            <button
-              type="button"
-              onClick={() => handleRestartBot(project.repo_name)}
-              disabled={isLoadingAction}
-              className="p-2 rounded-xl border border-[#00D4FF]/25 bg-[#00D4FF]/5 text-[#00D4FF] hover:bg-[#00D4FF]/15 transition-all cursor-pointer disabled:opacity-40"
-              title="Restart Workflow"
-            >
-              <RotateCw className={`w-3.5 h-3.5 ${isLoadingAction ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+          {/* STOP */}
+          <button
+            onClick={onStop}
+            disabled={actionLoading !== null}
+            className="h-11 flex items-center justify-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/5 text-rose-400 hover:bg-rose-500/15 active:bg-rose-500/20 disabled:opacity-40 transition-all font-mono text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest cursor-pointer"
+          >
+            {actionLoading === 'stopping' ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+            ) : (
+              <Power className="w-3 h-3 text-rose-400" />
+            )}
+            <span>{actionLoading === 'stopping' ? 'stopping' : 'STOP'}</span>
+          </button>
 
-          <div className="flex items-center justify-between gap-2 pt-1 text-[10px] font-mono text-[#4A6080]">
-            <button
-              type="button"
-              onClick={() => {
-                audio.playClick();
-                setActiveSecretsProject(project.repo_name);
-              }}
-              className="hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              <Key className="w-3 h-3" />
-              Secrets
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                audio.playClick();
-                setActiveLogsProject(project.repo_name);
-              }}
-              className="hover:text-[#00D4FF] transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              <Terminal className="w-3 h-3" />
-              Live Logs
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDeleteProject(project.repo_name)}
-              className="hover:text-rose-400 transition-colors cursor-pointer"
-              title="Untrack Repository"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </div>
+          {/* LOGS */}
+          <button
+            onClick={onLogs}
+            disabled={actionLoading !== null}
+            className="h-11 flex items-center justify-center gap-1.5 rounded-xl border border-neutral-700 bg-neutral-900/50 hover:bg-neutral-800 text-neutral-300 disabled:opacity-40 transition-all font-mono text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest cursor-pointer"
+          >
+            <Terminal className="w-3 h-3 text-neutral-400" />
+            <span>LOGS</span>
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -413,8 +308,11 @@ export default function App() {
   }, [theme]);
 
   // GitHub state
-  const [githubToken, setGithubToken] = useState<string | null>(localStorage.getItem('github_token'));
-  const [gitHubUser, setGitHubUser] = useState<any>(null);
+  const [githubToken, setGithubToken] = useState<string | null>(localStorage.getItem('gh_pat'));
+  const [gitHubUser, setGitHubUser] = useState<any>(() => {
+    const saved = localStorage.getItem('gh_user');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [repos, setRepos] = useState<any[]>([]);
   const [isFetchingRepos, setIsFetchingRepos] = useState(false);
   const [isFetchingUser, setIsFetchingUser] = useState(false);
@@ -426,6 +324,17 @@ export default function App() {
   const [botActionLoading, setBotActionLoading] = useState<string | null>(null);
   const [botFilter, setBotFilter] = useState<'all' | 'online' | 'offline' | 'queued' | 'failed'>('all');
   const [botSearch, setBotSearch] = useState('');
+
+  // Live status dashboard additions
+  const [savedBots, setSavedBots] = useState<SavedBot[]>([]);
+  const [botStatuses, setBotStatuses] = useState<Record<string, {
+    status: 'RUNNING' | 'QUEUED' | 'FAILED' | 'STOPPED' | 'UNKNOWN';
+    lastRunText: string;
+    loading: boolean;
+  }>>({});
+  const [lastUpdatedSecs, setLastUpdatedSecs] = useState<number>(0);
+  const [isRefreshingStatuses, setIsRefreshingStatuses] = useState(false);
+  const [botActionLoadingMap, setBotActionLoadingMap] = useState<Record<string, 'stopping' | 'starting' | null>>({});
 
   // Interactive logs and secrets state
   const [activeLogsProject, setActiveLogsProject] = useState<string | null>(null);
@@ -450,9 +359,16 @@ export default function App() {
       if (userResp.ok) {
         const userData = await userResp.json();
         setGitHubUser(userData);
+        localStorage.setItem('gh_user', JSON.stringify(userData));
       }
 
-      const reposResp = await fetch(getAbsoluteUrl(`/api/repos?token=${token}`));
+      // Fetch repos directly from GitHub API client-side!
+      const reposResp = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
+        headers: {
+          Authorization: `token ${token}`,
+          Accept: 'application/vnd.github.v3+json',
+        }
+      });
       if (reposResp.ok) {
         const reposData = await reposResp.json();
         setRepos(reposData);
@@ -465,39 +381,155 @@ export default function App() {
     }
   };
 
-  // Fetch projects from real data endpoints
-  const fetchProjectsAndStats = async () => {
+  // Fetch saved bots from local storage
+  const fetchSavedBots = async () => {
     try {
-      const projResp = await fetch(getAbsoluteUrl('/api/projects'));
-      if (projResp.ok) {
-        const projData = await projResp.json();
-        setActiveProjects(projData);
+      const savedStr = localStorage.getItem('multi_bot_saved_bots');
+      if (savedStr) {
+        const parsed = JSON.parse(savedStr);
+        setSavedBots(parsed);
+        return parsed;
       }
-    } catch (err) {
-      console.error('Failed to fetch stats/projects:', err);
+    } catch (e) {
+      console.error("Error reading saved bots:", e);
     }
+    setSavedBots([]);
+    return [];
   };
 
-  // Poll active projects status every 8 seconds
-  useEffect(() => {
-    if (githubToken) {
-      fetchProjectsAndStats();
-      const interval = setInterval(() => {
-        fetchProjectsAndStats();
-      }, 8000);
-      return () => clearInterval(interval);
-    }
-  }, [githubToken]);
+  const fetchGitHubStatuses = async (botsList?: SavedBot[]) => {
+    const list = botsList || savedBots;
+    if (!list || list.length === 0) return;
 
-  // Initial Boot loader delay
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500);
+    setIsRefreshingStatuses(true);
+    setBotStatuses(prev => {
+      const next = { ...prev };
+      list.forEach(bot => {
+        if (!next[bot.repoFullName]) {
+          next[bot.repoFullName] = { status: 'UNKNOWN', lastRunText: 'never run', loading: true };
+        } else {
+          next[bot.repoFullName] = { ...next[bot.repoFullName], loading: true };
+        }
+      });
+      return next;
+    });
 
-    if (githubToken) {
-      fetchGitHubUserAndRepos(githubToken);
-    }
+    const token = githubToken || localStorage.getItem('gh_pat');
+    const headers = {
+      'Authorization': `token ${token || 'demo_github_token'}`,
+      'Accept': 'application/vnd.github.v3+json'
+    };
+
+    const timeAgo = (dateStr: string) => {
+      try {
+        const seconds = Math.floor((new Date().getTime() - new Date(dateStr).getTime()) / 1000);
+        if (seconds < 60) return `${seconds}s ago`;
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        return `${days}d ago`;
+      } catch (e) {
+        return 'recently';
+      }
+    };
+
+    await Promise.all(list.map(async (bot) => {
+      try {
+        const resp = await fetch(`https://api.github.com/repos/${bot.repoOwner}/${bot.repoName}/actions/runs?per_page=3`, { headers });
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
+        const data = await resp.json();
+        const runs = data.workflow_runs || [];
+        if (runs.length === 0) {
+          setBotStatuses(prev => ({
+            ...prev,
+            [bot.repoFullName]: { status: 'UNKNOWN', lastRunText: 'No runs found', loading: false }
+          }));
+          return;
+        }
+
+        const latestRun = runs[0];
+        const status = latestRun.status; 
+        const conclusion = latestRun.conclusion; 
+        
+        let mappedStatus: 'RUNNING' | 'QUEUED' | 'FAILED' | 'STOPPED' | 'UNKNOWN' = 'UNKNOWN';
+        if (status === 'in_progress') {
+          mappedStatus = 'RUNNING';
+        } else if (status === 'queued' || status === 'waiting') {
+          mappedStatus = 'QUEUED';
+        } else if (conclusion === 'failure') {
+          mappedStatus = 'FAILED';
+        } else if (conclusion === 'cancelled' || status === 'completed') {
+          mappedStatus = 'STOPPED';
+        }
+
+        const lastRunTime = latestRun.created_at || latestRun.updated_at;
+        const lastRunText = lastRunTime ? timeAgo(lastRunTime) : 'Never run';
+
+        setBotStatuses(prev => ({
+          ...prev,
+          [bot.repoFullName]: { status: mappedStatus, lastRunText, loading: false }
+        }));
+
+      } catch (err) {
+        console.error(`Failed to fetch status for ${bot.repoFullName}:`, err);
+        setBotStatuses(prev => ({
+          ...prev,
+          [bot.repoFullName]: { status: 'UNKNOWN', lastRunText: 'Error connecting', loading: false }
+        }));
+      }
+    }));
+
+    setIsRefreshingStatuses(false);
+    setLastUpdatedSecs(0);
+  };
+
+  // Silent validation on mount
+  useEffect(() => {
+    const checkTokenSilently = async () => {
+      const token = localStorage.getItem('gh_pat');
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsFetchingUser(true);
+        const userResp = await fetch('https://api.github.com/user', {
+          headers: {
+            'Authorization': `token ${token}`,
+            'Accept': 'application/vnd.github.v3+json',
+          }
+        });
+
+        if (userResp.status === 200) {
+          const userData = await userResp.json();
+          setGitHubUser(userData);
+          localStorage.setItem('gh_user', JSON.stringify(userData));
+          setGithubToken(token);
+          
+          // Pre-fetch repositories in the background
+          fetchGitHubUserAndRepos(token);
+        } else if (userResp.status === 401 || userResp.status === 403) {
+          localStorage.removeItem('gh_pat');
+          localStorage.removeItem('gh_user');
+          localStorage.removeItem('multi_bot_saved_bots');
+          setGithubToken(null);
+          setGitHubUser(null);
+          addToast('Session expired. Please reconnect.', 'error');
+        }
+      } catch (err) {
+        console.error('Silent token validation error:', err);
+      } finally {
+        setIsFetchingUser(false);
+        setIsLoading(false);
+      }
+    };
+
+    checkTokenSilently();
 
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 30);
@@ -505,57 +537,53 @@ export default function App() {
 
     window.addEventListener('scroll', handleScroll);
     return () => {
-      clearTimeout(timer);
       window.removeEventListener('scroll', handleScroll);
     };
+  }, []);
+
+  // Poll saved bots statuses
+  useEffect(() => {
+    if (githubToken) {
+      fetchSavedBots().then((list) => {
+        if (list && list.length > 0) {
+          fetchGitHubStatuses(list);
+        }
+      });
+    }
   }, [githubToken]);
 
-  const handleConnectGitHub = async () => {
-    audio.playClick();
-    addToast('Opening GitHub OAuth Gateway...', 'info');
-    try {
-      const resp = await fetch(getAbsoluteUrl('/api/login'));
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.url) {
-          const width = 600;
-          const height = 700;
-          const left = window.screenX + (window.outerWidth - width) / 2;
-          const top = window.screenY + (window.outerHeight - height) / 2;
-          const popup = window.open(
-            data.url,
-            'github_oauth_popup',
-            `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,status=yes`
-          );
-          if (!popup) {
-            addToast('Popup blocked! Please allow popups for this site to log in.', 'error');
-          }
-        } else {
-          throw new Error('No authentication redirect URL found.');
+  // Set up 30 seconds interval & 1s counter increments
+  useEffect(() => {
+    if (!githubToken) return;
+
+    const counterInterval = setInterval(() => {
+      setLastUpdatedSecs(prev => {
+        if (prev >= 29) {
+          fetchGitHubStatuses();
+          return 0;
         }
-      } else {
-        const errText = await resp.text();
-        throw new Error(errText || 'Authentication gateway offline.');
-      }
-    } catch (e: any) {
-      console.error('GitHub OAuth redirect error:', e);
-      addToast(e.message || 'Failed to initiate OAuth', 'error');
-    }
-  };
+        return prev + 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(counterInterval);
+  }, [githubToken, savedBots]);
 
   const handleDisconnectClick = async () => {
     audio.playClick();
-    if (!confirm('Are you absolutely sure you want to disconnect this node? Your active dashboard projects will be cleared.')) return;
-    
     setIsDisconnecting(true);
-    addToast('Disconnecting from GitHub...', 'info');
     
     try {
-      await new Promise(r => setTimeout(r, 1000));
+      localStorage.removeItem('gh_pat');
+      localStorage.removeItem('gh_user');
+      localStorage.removeItem('multi_bot_saved_bots');
       localStorage.removeItem('github_token');
+      localStorage.removeItem('tracked_bots');
+      
       setGithubToken(null);
       setGitHubUser(null);
       setRepos([]);
+      setSavedBots([]);
       setActiveProjects([]);
       audio.playSuccess();
       addToast('Disconnected successfully.', 'success');
@@ -582,180 +610,213 @@ export default function App() {
     }
   };
 
-  const handleSaveManualToken = (token: string) => {
-    localStorage.setItem('github_token', token);
+  const handleSaveManualToken = (token: string, userData: any) => {
+    localStorage.setItem('gh_pat', token);
+    localStorage.setItem('gh_user', JSON.stringify(userData));
     setGithubToken(token);
-    addToast('GitHub token imported successfully.', 'success');
+    setGitHubUser(userData);
+    fetchGitHubUserAndRepos(token);
+    addToast(`Connected as @${userData.login}`, 'success');
   };
 
-  // Sync token from direct callback query
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    if (token) {
-      localStorage.setItem('github_token', token);
-      setGithubToken(token);
-      window.history.replaceState({}, document.title, window.location.pathname);
-      addToast('GitHub session restored.', 'success');
-    }
-  }, []);
+  // Bot Node Action controls (using direct GitHub integration)
+  const handleStopBot = async (bot: SavedBot) => {
+    audio.playClick();
+    setBotActionLoadingMap(prev => ({ ...prev, [bot.repoFullName]: 'stopping' }));
+    addToast(`Retrieving active runs for ${bot.repoFullName}...`, 'info');
+    try {
+      const token = githubToken || localStorage.getItem('github_token');
+      const headers = {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json'
+      };
+      
+      // 1. Fetch latest workflow runs
+      const runsResp = await fetch(`https://api.github.com/repos/${bot.repoOwner}/${bot.repoName}/actions/runs?per_page=5`, { headers });
+      if (!runsResp.ok) {
+        throw new Error(`Failed to query workflow runs: HTTP ${runsResp.status}`);
+      }
+      const runsData = await runsResp.json();
+      const activeRuns = (runsData.workflow_runs || []).filter(
+        (run: any) => run.status === 'in_progress' || run.status === 'queued' || run.status === 'waiting'
+      );
 
-  // Listen for success message from popup (after callback completes)
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && !origin.includes('vercel.app')) {
+      if (activeRuns.length === 0) {
+        addToast(`No active runs found to stop for ${bot.repoFullName}.`, 'info');
+        // Force status refresh
+        fetchGitHubStatuses();
         return;
       }
-      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-        const token = event.data.token;
-        if (token) {
-          localStorage.setItem('github_token', token);
-          setGithubToken(token);
-          audio.playSuccess();
-          addToast('Authorized successfully via GitHub OAuth!', 'success');
-        }
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
 
-  // Bot Node Action controls
-  const handleStopBot = async (repoName: string) => {
-    audio.playClick();
-    setBotActionLoading(repoName);
-    addToast(`Requesting workflow run stop for ${repoName}...`, 'info');
-    try {
-      const resp = await fetch(getAbsoluteUrl('/api/workflow/stop'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repo_name: repoName,
-          github_token: githubToken || 'demo_p_token'
-        })
-      });
-      if (resp.ok) {
-        await fetchProjectsAndStats();
-        audio.playSuccess();
-        addToast(`Workflow run stopped successfully for ${repoName}.`, 'success');
-      } else {
-        addToast('Failed to stop workflow run.', 'error');
-      }
+      // 2. Cancel active runs
+      addToast(`Cancelling ${activeRuns.length} active run(s)...`, 'info');
+      await Promise.all(activeRuns.map(async (run: any) => {
+        const cancelResp = await fetch(`https://api.github.com/repos/${bot.repoOwner}/${bot.repoName}/actions/runs/${run.id}/cancel`, {
+          method: 'POST',
+          headers
+        });
+        if (!cancelResp.ok) {
+          console.warn(`Failed to cancel run ${run.id}: ${cancelResp.status}`);
+        }
+      }));
+
+      audio.playSuccess();
+      addToast(`Workflow cancellation requested for ${bot.repoFullName}.`, 'success');
+      
+      // Poll to update status
+      setTimeout(() => {
+        fetchGitHubStatuses();
+      }, 3000);
+
     } catch (err: any) {
       console.error('Failed to stop bot:', err);
-      addToast('Connection failed: ' + err.message, 'error');
+      addToast('Stop failed: ' + err.message, 'error');
     } finally {
-      setBotActionLoading(null);
+      setBotActionLoadingMap(prev => ({ ...prev, [bot.repoFullName]: null }));
     }
   };
 
-  const handleStartBot = async (repoName: string) => {
+  const handleRestartBot = async (bot: SavedBot) => {
     audio.playClick();
-    setBotActionLoading(repoName);
-    addToast(`Triggering start workflow run for ${repoName}...`, 'info');
+    setBotActionLoadingMap(prev => ({ ...prev, [bot.repoFullName]: 'starting' }));
+    addToast(`Triggering bot workflow dispatch for ${bot.repoFullName}...`, 'info');
+    
     try {
-      const resp = await fetch(getAbsoluteUrl('/api/workflow/start'), {
+      const token = githubToken || localStorage.getItem('github_token');
+      const headers = {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      };
+
+      // Try main first, fallback to master
+      let success = false;
+      let branchToTry = 'main';
+      
+      let resp = await fetch(`https://api.github.com/repos/${bot.repoOwner}/${bot.repoName}/actions/workflows/${bot.workflowFile}/dispatches`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repo_name: repoName,
-          github_token: githubToken || 'demo_p_token'
-        })
+        headers,
+        body: JSON.stringify({ ref: branchToTry })
       });
+
       if (resp.ok) {
-        await fetchProjectsAndStats();
-        audio.playSuccess();
-        addToast(`Workflow run started successfully for ${repoName}.`, 'success');
+        success = true;
       } else {
-        addToast('Failed to trigger workflow run.', 'error');
+        console.warn(`Failed workflow dispatch on branch main, trying master...`);
+        branchToTry = 'master';
+        resp = await fetch(`https://api.github.com/repos/${bot.repoOwner}/${bot.repoName}/actions/workflows/${bot.workflowFile}/dispatches`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ref: branchToTry })
+        });
+        if (resp.ok) {
+          success = true;
+        }
+      }
+
+      if (success) {
+        audio.playSuccess();
+        addToast(`Bot restart triggered on ${branchToTry} successfully!`, 'success');
+        // Refresh status after 3 seconds
+        setTimeout(() => {
+          fetchGitHubStatuses();
+        }, 3000);
+      } else {
+        const errorText = await resp.text();
+        throw new Error(errorText || `Status code ${resp.status}`);
       }
     } catch (err: any) {
       console.error('Failed to start bot:', err);
-      addToast('Connection failed: ' + err.message, 'error');
+      addToast('Restart failed: ' + err.message, 'error');
     } finally {
-      setBotActionLoading(null);
+      setBotActionLoadingMap(prev => ({ ...prev, [bot.repoFullName]: null }));
     }
   };
 
-  const handleRestartBot = async (repoName: string) => {
+  const handleDeleteProject = async (bot: SavedBot) => {
     audio.playClick();
-    setBotActionLoading(repoName);
-    addToast(`Requesting workflow run restart for ${repoName}...`, 'info');
+    if (!confirm(`Are you sure you want to remove ${bot.repoFullName} from your dashboard? This will untrack it.`)) return;
+    
+    addToast(`Untracking ${bot.repoFullName}...`, 'info');
     try {
-      const resp = await fetch(getAbsoluteUrl('/api/workflow/restart'), {
+      const current = localStorage.getItem('multi_bot_saved_bots');
+      if (current) {
+        const parsed: SavedBot[] = JSON.parse(current);
+        const filtered = parsed.filter(b => b.repoFullName !== bot.repoFullName);
+        localStorage.setItem('multi_bot_saved_bots', JSON.stringify(filtered));
+        setSavedBots(filtered);
+      }
+      
+      // Also notify legacy API if needed
+      await fetch(getAbsoluteUrl('/api/projects/delete'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repo_name: repoName,
-          github_token: githubToken || 'demo_p_token'
-        })
-      });
-      if (resp.ok) {
-        await fetchProjectsAndStats();
-        audio.playSuccess();
-        addToast(`Workflow run restarted successfully for ${repoName}.`, 'success');
-      } else {
-        addToast('Failed to restart workflow.', 'error');
-      }
-    } catch (err: any) {
-      console.error('Failed to restart bot:', err);
-      addToast('Connection failed: ' + err.message, 'error');
-    } finally {
-      setBotActionLoading(null);
-    }
-  };
+        body: JSON.stringify({ repo_name: bot.repoFullName })
+      }).catch(e => console.warn("Legacy API sync skipped:", e));
 
-  const handleDeleteProject = async (repoName: string) => {
-    audio.playClick();
-    if (!confirm('Are you sure you want to remove this project from your dashboard? This will untrack it.')) return;
-    setBotActionLoading(repoName);
-    addToast(`Untracking ${repoName}...`, 'info');
-    try {
-      const resp = await fetch(getAbsoluteUrl('/api/projects/delete'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo_name: repoName })
-      });
-      if (resp.ok) {
-        await fetchProjectsAndStats();
-        audio.playSuccess();
-        addToast('Project untracked from dashboard successfully.', 'success');
-      } else {
-        addToast('Failed to untrack project.', 'error');
-      }
+      audio.playSuccess();
+      addToast('Project untracked from dashboard successfully.', 'success');
     } catch (err: any) {
       console.error('Failed to delete project:', err);
-      addToast('Connection failed: ' + err.message, 'error');
-    } finally {
-      setBotActionLoading(null);
+      addToast('Untrack failed: ' + err.message, 'error');
     }
   };
 
   const handleSaveInlineSecret = async (repoName: string) => {
     if (!inlineSecretKey.trim() || !inlineSecretValue.trim()) return;
     setIsSavingSecret(true);
-    addToast(`Encrypting and committing secret ${inlineSecretKey} to GitHub...`, 'info');
+    const formattedKey = inlineSecretKey.toUpperCase().replace(/[^A-Z0-9_]/g, '_').trim();
+    addToast(`Encrypting and committing secret ${formattedKey} to GitHub...`, 'info');
     try {
-      const formattedKey = inlineSecretKey.toUpperCase().replace(/[^A-Z0-9_]/g, '_').trim();
-      const resp = await fetch(getAbsoluteUrl('/api/secrets/set'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const [owner, repo] = repoName.split('/');
+      const token = githubToken || localStorage.getItem('gh_pat');
+      if (!token) {
+        throw new Error('No GitHub session found. Please reconnect.');
+      }
+
+      const headers = {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+      };
+
+      // 1. Get repository public key
+      const pubKeyResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/secrets/public-key`, { headers });
+      if (!pubKeyResp.ok) {
+        const text = await pubKeyResp.text();
+        throw new Error(`Failed to fetch public key: ${text}`);
+      }
+      const pubKeyData = await pubKeyResp.json();
+      const { key_id, key: publicKeyBase64 } = pubKeyData;
+
+      // 2. Encrypt using libsodium
+      await sodium.ready;
+      const binkey = sodium.from_base64(publicKeyBase64, sodium.base64_variants.ORIGINAL);
+      const binsec = sodium.from_string(inlineSecretValue.trim());
+      const encBytes = sodium.crypto_box_seal(binsec, binkey);
+      const encrypted_value = sodium.to_base64(encBytes, sodium.base64_variants.ORIGINAL);
+
+      // 3. Save secret via PUT request
+      const putResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/secrets/${formattedKey}`, {
+        method: 'PUT',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          repo_name: repoName,
-          github_token: githubToken,
-          secret_name: formattedKey,
-          secret_value: inlineSecretValue.trim()
-        })
+          encrypted_value,
+          key_id,
+        }),
       });
-      if (resp.ok) {
+
+      if (putResp.status === 201 || putResp.status === 204) {
         audio.playSuccess();
         addToast(`Secret ${formattedKey} successfully saved to GitHub.`, 'success');
         setInlineSecretKey('');
         setInlineSecretValue('');
         setActiveSecretsProject(null);
       } else {
-        addToast('Failed to save secret to GitHub.', 'error');
+        const text = await putResp.text();
+        throw new Error(text || `Failed with status ${putResp.status}`);
       }
     } catch (err: any) {
       console.error('Failed to set secret:', err);
@@ -770,7 +831,7 @@ export default function App() {
     setIsMuted(status);
   };
 
-  const runningNodesCount = activeProjects.filter(p => p.status === 'online').length;
+  const runningNodesCount = savedBots.filter(bot => botStatuses[bot.repoFullName]?.status === 'RUNNING').length;
 
   return (
     <AnimatePresence mode="wait">
@@ -779,7 +840,6 @@ export default function App() {
       ) : !githubToken ? (
         <LoginScreen
           key="login"
-          onConnectGitHub={handleConnectGitHub}
           onSaveManualToken={handleSaveManualToken}
           isMuted={isMuted}
           onToggleMute={handleToggleMute}
@@ -993,13 +1053,13 @@ export default function App() {
                   {/* Filters bar */}
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-[#00D4FF]/10 bg-[#050B18]/30">
                     <div className="relative w-full sm:max-w-xs">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4A6080]" />
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4A6080]" />
                       <input
                         type="text"
                         placeholder="Search active bots..."
                         value={botSearch}
                         onChange={(e) => setBotSearch(e.target.value)}
-                        className="w-full bg-[#050B18] border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#00D4FF] rounded-lg pl-9 pr-3 py-1.5 text-xs text-white font-mono outline-none transition-all placeholder:text-[#4A6080]"
+                        className="w-full bg-[#050B18] border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#00D4FF] rounded-xl pl-10 pr-3 h-12 sm:h-9 py-3 sm:py-1.5 text-base sm:text-xs text-white font-mono outline-none transition-all placeholder:text-[#4A6080]"
                       />
                     </div>
 
@@ -1022,7 +1082,7 @@ export default function App() {
                               audio.playClick();
                               setBotFilter(filter);
                             }}
-                            className={`flex-1 sm:flex-initial text-center px-2.5 py-1.5 rounded-lg font-mono text-[11px] font-bold uppercase tracking-wider border transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                            className={`flex-1 sm:flex-initial text-center px-3.5 py-2 sm:py-1.5 rounded-lg font-mono text-[11px] sm:text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
                               botFilter === filter
                                 ? 'bg-[#00D4FF]/15 border-[#00D4FF] text-[#00D4FF]'
                                 : 'bg-transparent border-[#4A6080]/15 text-[#4A6080] hover:text-white hover:border-[#4A6080]/30'
@@ -1035,12 +1095,17 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pb-4 border-b border-[#00D4FF]/5">
-                    <h3 className="text-sm font-display font-extrabold text-[#F0F6FF] tracking-wider uppercase">
-                      Tracked Bot Repositories
-                    </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#00D4FF]/5 gap-2">
+                    <div className="space-y-0.5">
+                      <h3 className="text-sm font-display font-extrabold text-[#F0F6FF] tracking-wider uppercase">
+                        Tracked Bot Repositories
+                      </h3>
+                      <p className="text-[10px] font-mono text-neutral-500">
+                        Auto-refreshing in {30 - lastUpdatedSecs}s • Last updated {lastUpdatedSecs}s ago
+                      </p>
+                    </div>
                     <span className="text-[10px] font-mono text-[#00D4FF] font-semibold">
-                      {activeProjects.length} Repos Registered
+                      {savedBots.length} Repos Registered
                     </span>
                   </div>
 
@@ -1050,31 +1115,31 @@ export default function App() {
                     <AddProjectCard onClick={() => { audio.playClick(); setIsNewProjectOpen(true); }} />
 
                     {/* Active Deployed Project Cards */}
-                    {activeProjects
-                      .filter((project) => {
-                        const matchesSearch = project.repo_name.toLowerCase().includes(botSearch.toLowerCase());
+                    {savedBots
+                      .filter((bot) => {
+                        const matchesSearch = bot.repoFullName.toLowerCase().includes(botSearch.toLowerCase());
                         if (!matchesSearch) return false;
                         if (botFilter === 'all') return true;
-                        return project.status === botFilter;
+                        const status = botStatuses[bot.repoFullName]?.status || 'UNKNOWN';
+                        if (botFilter === 'online') return status === 'RUNNING';
+                        if (botFilter === 'queued') return status === 'QUEUED';
+                        if (botFilter === 'failed') return status === 'FAILED';
+                        if (botFilter === 'offline') return status === 'STOPPED';
+                        return true;
                       })
-                      .map((project, idx) => (
-                        <ProjectCard
-                          key={project.id}
-                          project={project}
-                          botActionLoading={botActionLoading}
-                          activeSecretsProject={activeSecretsProject}
-                          setActiveSecretsProject={setActiveSecretsProject}
-                          setActiveLogsProject={setActiveLogsProject}
-                          handleStopBot={handleStopBot}
-                          handleStartBot={handleStartBot}
-                          handleRestartBot={handleRestartBot}
-                          handleDeleteProject={handleDeleteProject}
-                          handleSaveInlineSecret={handleSaveInlineSecret}
-                          inlineSecretKey={inlineSecretKey}
-                          setInlineSecretKey={setInlineSecretKey}
-                          inlineSecretValue={inlineSecretValue}
-                          setInlineSecretValue={setInlineSecretValue}
-                          isSavingSecret={isSavingSecret}
+                      .map((bot, idx) => (
+                        <SavedBotCard
+                          key={bot.id}
+                          bot={bot}
+                          statusInfo={botStatuses[bot.repoFullName]}
+                          onStop={() => handleStopBot(bot)}
+                          onRestart={() => handleRestartBot(bot)}
+                          onLogs={() => {
+                            audio.playClick();
+                            setActiveLogsProject(bot.repoFullName);
+                          }}
+                          onDelete={() => handleDeleteProject(bot)}
+                          actionLoading={botActionLoadingMap[bot.repoFullName] || null}
                           index={idx}
                         />
                       ))}
@@ -1272,7 +1337,11 @@ export default function App() {
             isFetchingRepos={isFetchingRepos}
             githubToken={githubToken || 'demo_github_token'}
             onDeploySuccess={() => {
-              fetchProjectsAndStats();
+              fetchSavedBots().then((list) => {
+                if (list && list.length > 0) {
+                  fetchGitHubStatuses(list);
+                }
+              });
             }}
           />
 
