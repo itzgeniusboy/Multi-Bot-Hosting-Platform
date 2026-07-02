@@ -71,6 +71,23 @@ export default function NewProjectModal({
     }
   }, [isOpen, initialData]);
 
+  // Auto-detect script entry point in repository root
+  useEffect(() => {
+    if (selectedRepo && githubToken && step === 'configure' && !initialData) {
+      fetch(`/api/repo/detect-entrypoint?repo_name=${encodeURIComponent(selectedRepo)}&github_token=${encodeURIComponent(githubToken)}`)
+        .then((res) => {
+          if (res.ok) return res.json();
+          throw new Error('Failed to auto-detect entry point');
+        })
+        .then((data) => {
+          if (data.default_command) {
+            setSelectedScript(data.default_command);
+          }
+        })
+        .catch((err) => console.error("Error auto-detecting entry point:", err));
+    }
+  }, [selectedRepo, githubToken, step, initialData]);
+
   if (!isOpen) return null;
 
   // Handle successful deployment

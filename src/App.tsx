@@ -769,7 +769,7 @@ export default function App() {
 
           {/* Floating Glassmorphism Navbar */}
           <nav 
-            className={`fixed top-6 left-1/2 -translate-x-1/2 px-6 py-3.5 rounded-full flex items-center justify-between z-50 w-[90%] max-w-[1000px] transition-all duration-300 border ${
+            className={`fixed top-6 left-1/2 -translate-x-1/2 px-6 py-3.5 rounded-full flex items-center justify-between z-[100] w-[90%] max-w-[1000px] transition-all duration-300 border ${
               isScrolled 
                 ? 'bg-[#0A1628]/85 border-[#00D4FF]/15 shadow-[0_30px_80px_rgba(0,0,0,0.5),0_0_40px_rgba(0,212,255,0.04)] backdrop-blur-md' 
                 : 'bg-transparent border-transparent'
@@ -900,8 +900,8 @@ export default function App() {
           </section>
 
           {/* Main Dashboard Panel */}
-          <div className="max-w-[1200px] mx-auto px-6 pb-24 relative z-10">
-            <section id="dashboard-section" className="space-y-12">
+          <div className="max-w-[1200px] mx-auto px-6 pb-24 relative z-[1]">
+            <section id="dashboard-section" className="pt-[70px] space-y-12 scroll-mt-[100px]">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -970,7 +970,10 @@ export default function App() {
                       />
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 w-full sm:w-auto">
+                    <div 
+                      className="flex flex-nowrap items-center gap-1.5 w-full sm:w-auto overflow-x-auto scrollbar-none"
+                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    >
                       {(['all', 'online', 'queued', 'failed', 'offline'] as const).map((filter) => {
                         const filterLabels = {
                           all: 'ALL',
@@ -982,8 +985,11 @@ export default function App() {
                         return (
                           <button
                             key={filter}
-                            onClick={() => setBotFilter(filter)}
-                            className={`flex-1 sm:flex-initial text-center px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg font-mono text-[8px] sm:text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer whitespace-nowrap ${
+                            onClick={() => {
+                              audio.playClick();
+                              setBotFilter(filter);
+                            }}
+                            className={`flex-1 sm:flex-initial text-center px-2.5 py-1.5 rounded-lg font-mono text-[11px] font-bold uppercase tracking-wider border transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
                               botFilter === filter
                                 ? 'bg-[#00D4FF]/15 border-[#00D4FF] text-[#00D4FF]'
                                 : 'bg-transparent border-[#4A6080]/15 text-[#4A6080] hover:text-white hover:border-[#4A6080]/30'

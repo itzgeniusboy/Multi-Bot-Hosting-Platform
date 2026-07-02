@@ -370,6 +370,11 @@ async function commitGitHubFile(token: string, repoName: string, filePath: strin
 
   if (putResp.status !== 200 && putResp.status !== 201) {
     const text = await putResp.text();
+    if (putResp.status === 403) {
+      throw new Error(`GITHUB_WRITE_FORBIDDEN_403: ${text}`);
+    } else if (putResp.status === 404) {
+      throw new Error(`GITHUB_WRITE_NOT_FOUND_404: ${text}`);
+    }
     throw new Error(`Failed to commit file ${filePath} to ${repoName}: ${text}`);
   }
 }
@@ -599,10 +604,72 @@ app.post("/api/projects/delete", (req, res) => {
   res.json({ success: true, message: "Project deleted from dashboard" });
 });
 
+app.get("/api/repo/detect-entrypoint", async (req, res) => {
+  const repo_name = req.query.repo_name as string;
+  const github_token = req.query.github_token as string;
+  if (!repo_name || !github_token) {
+    return res.status(400).json({ error: "Missing repo_name or github_token" });
+  }
+
+  try {
+    const headers = {
+      Authorization: `token ${github_token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "telegram-bot-backend",
+    };
+
+    const resp = await fetch(`https://api.github.com/repos/${repo_name}/contents`, { headers });
+    if (resp.status !== 200) {
+      return res.json({ default_command: "python main.py" });
+    }
+
+    const items: any = await resp.json();
+    if (Array.isArray(items)) {
+      const fileNames = items.map((item: any) => item.name);
+      const hasBotPy = fileNames.includes("bot.py");
+      const hasMainPy = fileNames.includes("main.py");
+      if (hasBotPy && !hasMainPy) {
+        return res.json({ default_command: "python bot.py" });
+      }
+    }
+    res.json({ default_command: "python main.py" });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post("/api/workflow/setup", async (req, res) => {
   const { repo_name, github_token } = req.body;
   if (!repo_name || !github_token) {
     return res.status(400).json({ error: "Missing repo_name or github_token" });
+  }
+
+  // 1. Pre-flight check: Automatic GitHub token validation
+  try {
+    const headers = {
+      Authorization: `token ${github_token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "telegram-bot-backend",
+    };
+
+    const rateResp = await fetch("https://api.github.com/user", { headers });
+    if (rateResp.status !== 200) {
+      const rateErrText = await rateResp.text();
+      return res.status(rateResp.status).json({ error: `Invalid GitHub Token pre-flight check failed: ${rateErrText}` });
+    }
+
+    const scopesHeader = rateResp.headers.get("X-OAuth-Scopes") || "";
+    const scopes = scopesHeader.split(",").map(s => s.trim().toLowerCase());
+    const hasRepo = scopes.includes("repo");
+    const hasWorkflow = scopes.includes("workflow");
+
+    if (!hasRepo || !hasWorkflow) {
+      return res.status(400).json({
+        error: "CRITICAL: Your GitHub Token is missing the mandatory 'workflow' or 'repo' permissions."
+      });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ error: `Failed to run token pre-flight validation: ${err.message}` });
   }
 
   const workflowYml = `name: 24x7 Bot Runner
@@ -690,6 +757,16 @@ jobs:
 
     res.json({ success: true, message: "Workflow .github/workflows/bot.yml successfully committed!" });
   } catch (err: any) {
+    if (err.message && err.message.includes("GITHUB_WRITE_FORBIDDEN_403")) {
+      return res.status(403).json({
+        error: "Repository Workflow Read/Write Restriction: Workflow write forbidden."
+      });
+    }
+    if (err.message && err.message.includes("GITHUB_WRITE_NOT_FOUND_404")) {
+      return res.status(404).json({
+        error: "Repository not found or token lacks write access to .github/workflows/."
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });

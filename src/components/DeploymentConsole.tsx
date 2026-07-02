@@ -332,13 +332,34 @@ export default function DeploymentConsole({
       {deployError && (
         <div className="p-4 bg-rose-500/5 border border-rose-500/10 rounded-xl flex items-start gap-3">
           <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-          <div className="space-y-1">
+          <div className="space-y-1 w-full">
             <span className="text-xs font-mono font-bold text-rose-400 block uppercase">
               Build & Integration Error
             </span>
-            <p className="text-[11px] text-[#4A6080] leading-relaxed">
-              {deployError} Please verify that your GitHub Token is correct and has the necessary permissions (<code className="text-rose-400">repo</code> scopes) to configure workflows and secure secrets on your repository.
-            </p>
+            {deployError.includes("Repository Workflow Read/Write Restriction") ? (
+              <div className="space-y-2 mt-1">
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  <strong className="text-rose-400">CRITICAL ERROR:</strong> Your GitHub Token has valid scopes, but the target repository is blocking automated workflow creation.
+                </p>
+                <div className="bg-[#050B18]/80 border border-[#00D4FF]/20 p-4 rounded-xl text-[11px] text-[#F0F6FF] space-y-2 leading-relaxed">
+                  <span className="text-[#00D4FF] font-mono font-bold block tracking-wider uppercase text-[10px]">
+                    🛠️ WORKFLOW PERMISSION AUTO-FIX GUIDE:
+                  </span>
+                  <div className="space-y-1.5 font-sans text-slate-300">
+                    <p>1. Open your repository <strong className="text-white font-mono bg-slate-800 px-1 py-0.5 rounded">{repoName}</strong> on GitHub.</p>
+                    <p>2. Click on the <strong className="text-[#00D4FF]">Settings</strong> tab at the top of the page.</p>
+                    <p>3. In the left sidebar, navigate to <strong className="text-[#00D4FF]">Actions</strong> &rarr; <strong className="text-[#00D4FF]">General</strong>.</p>
+                    <p>4. Scroll down to the <strong className="text-white">Workflow permissions</strong> section.</p>
+                    <p>5. Select <strong className="text-emerald-400 font-bold">'Read and Write permissions'</strong> and tick <strong className="text-white">"Allow GitHub Actions to create and approve pull requests"</strong>.</p>
+                    <p>6. Click <strong className="text-[#00D4FF]">Save</strong> and try deploying again!</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11px] text-[#4A6080] leading-relaxed">
+                {deployError} Please verify that your GitHub Token is correct and has the necessary permissions (<code className="text-rose-400">repo</code> and <code className="text-rose-400">workflow</code> scopes) to configure workflows and secure secrets on your repository.
+              </p>
+            )}
           </div>
         </div>
       )}
