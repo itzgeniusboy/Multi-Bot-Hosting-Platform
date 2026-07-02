@@ -887,53 +887,47 @@ export default function App() {
           <div className="glow-blob w-[600px] h-[600px] bottom-[15%] left-[2%] bg-purple-500/5" style={{ animationDelay: '4s' }} />
           <div className="glow-blob w-[450px] h-[450px] top-[60%] right-[10%] bg-pink-500/5" style={{ animationDelay: '2s' }} />
 
-          {/* Floating Glassmorphism Navbar */}
+          {/* Full-width Fixed Navbar */}
           <nav 
-            className={`fixed top-6 left-1/2 -translate-x-1/2 px-6 py-3.5 rounded-full flex items-center justify-between z-[100] w-[90%] max-w-[1000px] transition-all duration-300 border ${
-              isScrolled 
-                ? 'bg-[#0A1628]/85 border-[#00D4FF]/15 shadow-[0_30px_80px_rgba(0,0,0,0.5),0_0_40px_rgba(0,212,255,0.04)] backdrop-blur-md' 
-                : 'bg-transparent border-transparent'
-            }`}
+            className="fixed top-0 left-0 right-0 h-14 bg-[#0D1117] border-b border-[rgba(255,255,255,0.08)] flex items-center justify-between px-4 sm:px-6 z-[100]"
           >
-            <div className="flex items-center gap-2.5">
-              <div className="relative w-8 h-8 flex items-center justify-center">
-                <div className="absolute inset-0 rounded-full border border-dashed border-[#00D4FF]/30 animate-rotate-slow"></div>
-                <svg className="w-5 h-5 text-[#00D4FF]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <div className="flex items-center gap-3">
+              <div className="relative w-7 h-7 flex items-center justify-center text-[#00D4FF]">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polygon points="12 2 22 7.5 22 18.5 12 24 2 18.5 2 7.5" />
                 </svg>
               </div>
-              <span className="font-display font-extrabold text-[10px] sm:text-xs tracking-widest text-[#F0F6FF] whitespace-nowrap">
-                <span className="inline min-[400px]:hidden">MBHP</span>
-                <span className="hidden min-[400px]:inline">MULTI-BOT ENGINE</span>
+              <span className="font-sans font-bold text-[14px] sm:text-base tracking-tight text-[#F0F6FC] whitespace-nowrap">
+                Multi-Bot Hosting Platform
               </span>
             </div>
 
-            <div className="flex items-center gap-3 sm:gap-4 text-[11px] font-mono tracking-wider">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button 
                 type="button"
                 onClick={handleToggleMute}
-                className="p-1.5 rounded-full border border-[#00D4FF]/10 bg-[#0A1628]/40 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/30 transition-all cursor-pointer"
+                className="w-8 h-8 rounded-lg border border-[rgba(255,255,255,0.08)] bg-transparent text-[#8B949E] hover:text-[#00D4FF] hover:border-white/10 transition-all cursor-pointer flex items-center justify-center"
                 title={isMuted ? "Unmute sounds" : "Mute sounds"}
               >
-                {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </button>
 
               <button 
                 type="button"
                 onClick={() => { audio.playClick(); setIsSettingsOpen(true); }}
-                className="p-1.5 rounded-full border border-[#00D4FF]/10 bg-[#0A1628]/40 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/30 transition-all cursor-pointer"
+                className="w-8 h-8 rounded-lg border border-[rgba(255,255,255,0.08)] bg-transparent text-[#8B949E] hover:text-[#00D4FF] hover:border-white/10 transition-all cursor-pointer flex items-center justify-center"
                 title="System Settings"
               >
-                <Settings className="w-3.5 h-3.5" />
+                <Settings className="w-4 h-4" />
               </button>
 
               <button
                 type="button"
                 onClick={handleDisconnectClick}
                 disabled={isDisconnecting}
-                className="transition-all px-3 py-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 cursor-pointer text-[10px] font-mono tracking-wider font-semibold uppercase disabled:opacity-40"
+                className="h-8 px-3 rounded-lg border border-[rgba(255,255,255,0.08)] bg-transparent text-[#8B949E] hover:border-[#F85149] hover:bg-[#F85149]/10 hover:text-[#F85149] cursor-pointer text-xs font-semibold tracking-wider uppercase transition-all duration-200 disabled:opacity-40 whitespace-nowrap"
               >
-                {isDisconnecting ? 'Sign Out...' : 'Sign Out'}
+                {isDisconnecting ? 'SIGN OUT...' : 'SIGN OUT'}
               </button>
             </div>
           </nav>
@@ -1020,160 +1014,183 @@ export default function App() {
           </section>
 
           {/* Main Dashboard Panel */}
-          <div className="max-w-[1200px] mx-auto px-6 pb-24 relative z-[1]">
-            <section id="dashboard-section" className="pt-[70px] space-y-12 scroll-mt-[100px]">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                className="premium-glass-card rounded-2xl border border-[#00D4FF]/10 bg-[#0A1628]/40 p-8 shadow-[0_30px_80px_rgba(0,0,0,0.6)] backdrop-blur-md relative overflow-hidden"
-              >
-                <div className="absolute inset-0 card-grid-pattern opacity-5 pointer-events-none"></div>
-
-                {/* GitHub Profile Sync Header */}
-                <div className="flex flex-col md:flex-row items-center md:justify-between gap-6 pb-8 border-b border-[#00D4FF]/10 mb-10">
-                  <div className="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left">
-                    <div className="relative">
-                      <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#00D4FF]/30 animate-rotate-slow"></div>
-                      <div className="p-1">
-                        {gitHubUser?.avatar_url ? (
-                          <img
-                            src={gitHubUser.avatar_url}
-                            alt={gitHubUser.login}
-                            referrerPolicy="no-referrer"
-                            className="w-16 h-16 rounded-full border border-[#00D4FF]/20 object-cover"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 rounded-full border border-[#00D4FF]/20 bg-[#050B18] flex items-center justify-center">
-                            {isFetchingUser ? (
-                              <Loader2 className="w-6 h-6 text-[#00D4FF] animate-spin" />
-                            ) : (
-                              <Github className="w-7 h-7 text-[#4A6080]" />
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <span className="absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[#050B18]"></span>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 justify-center sm:justify-start">
-                        <h2 className="text-lg font-display font-bold text-white tracking-tight">
-                          {gitHubUser?.name || gitHubUser?.login || 'Connecting Developer...'}
-                        </h2>
-                        {gitHubUser?.login && (
-                          <span className="text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20">
-                            CONNECTED
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-[#4A6080] font-sans">
-                        {gitHubUser?.bio ? stripEmojis(gitHubUser.bio) : (gitHubUser?.html_url || 'Active developer session synchronized.')}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Dashboard Grid Filters & Controls */}
-                <div className="space-y-6">
-                  
-                  {/* Filters bar */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-[#00D4FF]/10 bg-[#050B18]/30">
-                    <div className="relative w-full sm:max-w-xs">
-                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4A6080]" />
-                      <input
-                        type="text"
-                        placeholder="Search active bots..."
-                        value={botSearch}
-                        onChange={(e) => setBotSearch(e.target.value)}
-                        className="w-full bg-[#050B18] border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#00D4FF] rounded-xl pl-10 pr-3 h-12 sm:h-9 py-3 sm:py-1.5 text-base sm:text-xs text-white font-mono outline-none transition-all placeholder:text-[#4A6080]"
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-24 relative z-[1] mt-8" id="dashboard-section">
+            
+            {/* GitHub Profile Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#0D1117] p-4 sm:p-6 mb-6 relative overflow-hidden"
+            >
+              <div className="absolute inset-0 card-grid-pattern opacity-5 pointer-events-none"></div>
+              <div className="flex items-center justify-between gap-4 relative z-10">
+                <div className="flex items-center gap-4">
+                  <div className="relative shrink-0">
+                    {gitHubUser?.avatar_url ? (
+                      <img
+                        src={gitHubUser.avatar_url}
+                        alt={gitHubUser.login}
+                        referrerPolicy="no-referrer"
+                        className="w-12 h-12 rounded-full border border-[rgba(255,255,255,0.08)] object-cover"
                       />
-                    </div>
-
-                    <div 
-                      className="flex flex-nowrap items-center gap-1.5 w-full sm:w-auto overflow-x-auto scrollbar-none"
-                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                    >
-                      {(['all', 'online', 'queued', 'failed', 'offline'] as const).map((filter) => {
-                        const filterLabels = {
-                          all: 'ALL',
-                          online: 'RUNNING',
-                          queued: 'QUEUED',
-                          failed: 'FAILED',
-                          offline: 'STOPPED'
-                        };
-                        return (
-                          <button
-                            key={filter}
-                            onClick={() => {
-                              audio.playClick();
-                              setBotFilter(filter);
-                            }}
-                            className={`flex-1 sm:flex-initial text-center px-3.5 py-2 sm:py-1.5 rounded-lg font-mono text-[11px] sm:text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
-                              botFilter === filter
-                                ? 'bg-[#00D4FF]/15 border-[#00D4FF] text-[#00D4FF]'
-                                : 'bg-transparent border-[#4A6080]/15 text-[#4A6080] hover:text-white hover:border-[#4A6080]/30'
-                            }`}
-                          >
-                            {filterLabels[filter]}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    ) : (
+                      <div className="w-12 h-12 rounded-full border border-[rgba(255,255,255,0.08)] bg-[#161B22] flex items-center justify-center text-[#8B949E]">
+                        <Github className="w-6 h-6" />
+                      </div>
+                    )}
+                    <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-[#3FB950] border-2 border-[#0D1117]" />
                   </div>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#00D4FF]/5 gap-2">
-                    <div className="space-y-0.5">
-                      <h3 className="text-sm font-display font-extrabold text-[#F0F6FF] tracking-wider uppercase">
-                        Tracked Bot Repositories
-                      </h3>
-                      <p className="text-[10px] font-mono text-neutral-500">
-                        Auto-refreshing in {30 - lastUpdatedSecs}s • Last updated {lastUpdatedSecs}s ago
-                      </p>
-                    </div>
-                    <span className="text-[10px] font-mono text-[#00D4FF] font-semibold">
-                      {savedBots.length} Repos Registered
-                    </span>
-                  </div>
-
-                  {/* Multi-bot Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* Add Project Card Button */}
-                    <AddProjectCard onClick={() => { audio.playClick(); setIsNewProjectOpen(true); }} />
-
-                    {/* Active Deployed Project Cards */}
-                    {savedBots
-                      .filter((bot) => {
-                        const matchesSearch = bot.repoFullName.toLowerCase().includes(botSearch.toLowerCase());
-                        if (!matchesSearch) return false;
-                        if (botFilter === 'all') return true;
-                        const status = botStatuses[bot.repoFullName]?.status || 'UNKNOWN';
-                        if (botFilter === 'online') return status === 'RUNNING';
-                        if (botFilter === 'queued') return status === 'QUEUED';
-                        if (botFilter === 'failed') return status === 'FAILED';
-                        if (botFilter === 'offline') return status === 'STOPPED';
-                        return true;
-                      })
-                      .map((bot, idx) => (
-                        <SavedBotCard
-                          key={bot.id}
-                          bot={bot}
-                          statusInfo={botStatuses[bot.repoFullName]}
-                          onStop={() => handleStopBot(bot)}
-                          onRestart={() => handleRestartBot(bot)}
-                          onLogs={() => {
-                            audio.playClick();
-                            setActiveLogsProject(bot.repoFullName);
-                          }}
-                          onDelete={() => handleDeleteProject(bot)}
-                          actionLoading={botActionLoadingMap[bot.repoFullName] || null}
-                          index={idx}
-                        />
-                      ))}
+                  <div className="space-y-0.5 text-left">
+                    <h2 className="text-[15px] font-bold text-[#F0F6FC]">
+                      {gitHubUser?.name || gitHubUser?.login || 'GitHub Developer'}
+                    </h2>
+                    <p className="text-[13px] text-[#8B949E] line-clamp-1 max-w-[200px] sm:max-w-md">
+                      {gitHubUser?.bio ? stripEmojis(gitHubUser.bio) : 'Active multi-bot daemon sessions synced.'}
+                    </p>
                   </div>
                 </div>
-              </motion.div>
-            </section>
+
+                <span className="text-[10px] font-mono font-bold tracking-wider px-2.5 py-1 bg-[#3FB950]/10 text-[#3FB950] rounded-full border border-[#3FB950]/20 select-none shrink-0">
+                  CONNECTED
+                </span>
+              </div>
+            </motion.div>
+
+            {/* Dashboard Grid Filters & Controls */}
+            <div className="space-y-6">
+              
+              {/* Filters & Search on a transparent background, not an inner card */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2">
+                <div className="relative w-full sm:max-w-xs">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8B949E]" />
+                  <input
+                    type="text"
+                    placeholder="Search active bots..."
+                    value={botSearch}
+                    onChange={(e) => setBotSearch(e.target.value)}
+                    className="w-full bg-[#0D1117] border border-[rgba(255,255,255,0.08)] hover:border-white/10 focus:border-[#00D4FF] rounded-xl pl-10 pr-4 h-11 text-base sm:text-sm text-[#F0F6FC] outline-none transition-all placeholder:text-[#484F58]"
+                  />
+                </div>
+
+                {/* Filter tabs row: inline on mobile with hidden scrollbar */}
+                <div 
+                  className="flex flex-nowrap items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 scrollbar-none"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                >
+                  {(['all', 'online', 'queued', 'failed', 'offline'] as const).map((filter) => {
+                    const filterLabels = {
+                      all: 'ALL',
+                      online: 'RUNNING',
+                      queued: 'QUEUED',
+                      failed: 'FAILED',
+                      offline: 'STOPPED'
+                    };
+                    const isActive = botFilter === filter;
+                    return (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => {
+                          audio.playClick();
+                          setBotFilter(filter);
+                        }}
+                        className={`px-3.5 h-9 rounded-lg font-mono text-[11px] font-bold uppercase tracking-wider border transition-all duration-200 cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                          isActive
+                            ? 'bg-[#00D4FF] border-[#00D4FF] text-[#080C14]'
+                            : 'bg-transparent border-[rgba(255,255,255,0.08)] text-[#8B949E] hover:bg-white/5 hover:text-[#F0F6FC]'
+                        }`}
+                      >
+                        {filterLabels[filter]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section Heading following design system rules */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[rgba(255,255,255,0.08)] mb-6 gap-2">
+                <div className="space-y-0.5 text-left">
+                  <h3 className="text-[15px] font-bold text-[#F0F6FC] uppercase tracking-wider">
+                    Tracked Bot Repositories
+                  </h3>
+                  <p className="text-[11px] font-mono text-[#8B949E]">
+                    Auto-refreshing in {30 - lastUpdatedSecs}s • Last updated {lastUpdatedSecs}s ago
+                  </p>
+                </div>
+                <span className="text-[10px] font-mono text-[#00D4FF] font-semibold text-left select-none">
+                  {savedBots.length} Repos Registered
+                </span>
+              </div>
+
+              {/* Multi-bot Grid or Empty State */}
+              {savedBots.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-center py-12 px-4 border-none bg-transparent">
+                  {/* Mini robot icon with glow and 0.4 opacity */}
+                  <div className="relative mb-4 opacity-45">
+                    <div className="absolute inset-0 rounded-full bg-[#00D4FF]/20 blur-lg scale-150" />
+                    <div className="w-12 h-12 rounded-xl bg-[#161B22] border border-[rgba(255,255,255,0.08)] flex items-center justify-center text-[#00D4FF]">
+                      <Cpu className="w-8 h-8 text-[#00D4FF]" />
+                    </div>
+                  </div>
+                  
+                  <h3 className="text-[15px] font-bold text-[#F0F6FC] mb-1">
+                    Deploy Your First Daemon
+                  </h3>
+                  <p className="text-[13px] text-[#8B949E] mb-6 max-w-xs">
+                    Connect a Telegram token to begin 24x7 hosting
+                  </p>
+                  
+                  <button
+                    onClick={() => {
+                      audio.playClick();
+                      setIsNewProjectOpen(true);
+                    }}
+                    className="h-11 px-6 rounded-xl bg-[#00D4FF] hover:bg-[#00D4FF]/90 text-[#080C14] font-sans text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    id="empty-state-import-btn"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>IMPORT REPOSITORY</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Add Project Card Button */}
+                  <AddProjectCard onClick={() => { audio.playClick(); setIsNewProjectOpen(true); }} />
+
+                  {/* Active Deployed Project Cards */}
+                  {savedBots
+                    .filter((bot) => {
+                      const matchesSearch = bot.repoFullName.toLowerCase().includes(botSearch.toLowerCase());
+                      if (!matchesSearch) return false;
+                      if (botFilter === 'all') return true;
+                      const status = botStatuses[bot.repoFullName]?.status || 'UNKNOWN';
+                      if (botFilter === 'online') return status === 'RUNNING';
+                      if (botFilter === 'queued') return status === 'QUEUED';
+                      if (botFilter === 'failed') return status === 'FAILED';
+                      if (botFilter === 'offline') return status === 'STOPPED';
+                      return true;
+                    })
+                    .map((bot, idx) => (
+                      <SavedBotCard
+                        key={bot.id}
+                        bot={bot}
+                        statusInfo={botStatuses[bot.repoFullName]}
+                        onStop={() => handleStopBot(bot)}
+                        onRestart={() => handleRestartBot(bot)}
+                        onLogs={() => {
+                          audio.playClick();
+                          setActiveLogsProject(bot.repoFullName);
+                        }}
+                        onDelete={() => handleDeleteProject(bot)}
+                        actionLoading={botActionLoadingMap[bot.repoFullName] || null}
+                        index={idx}
+                      />
+                    ))}
+                </div>
+              )}
+            </div>
 
             <footer className="pt-24 border-t border-[#00D4FF]/10 text-center text-[10px] font-mono text-[#4A6080]">
               <p>Multi-Bot Hosting Platform  —  Built on Express & GitHub Actions  —  2026</p>

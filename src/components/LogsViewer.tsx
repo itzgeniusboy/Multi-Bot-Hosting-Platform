@@ -130,6 +130,35 @@ export default function LogsViewer({ repoName, githubToken, isOpen, onClose }: L
     }
   };
 
+  const renderLogLine = (line: string, index: number) => {
+    if (!line) return <div key={index} className="h-4" />;
+    
+    const isError = /error|fail|exception/i.test(line);
+    const isSuccess = /success|started|connected/i.test(line);
+    
+    let textColor = 'text-[#F0F6FC]';
+    if (isError) textColor = 'text-[#F85149]';
+    else if (isSuccess) textColor = 'text-[#3FB950]';
+    
+    // Check for ISO timestamp (e.g. 2026-07-02T12:34:56.789Z)
+    const tsMatch = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s*(.*)$/);
+    if (tsMatch) {
+      const [, timestamp, rest] = tsMatch;
+      return (
+        <div key={index} className="leading-relaxed whitespace-pre-wrap py-0.5 select-text font-mono text-[12px] flex items-start gap-2">
+          <span className="text-[#484F58] select-none shrink-0">{timestamp}</span>
+          <span className={textColor}>{rest}</span>
+        </div>
+      );
+    }
+    
+    return (
+      <div key={index} className={`leading-relaxed whitespace-pre-wrap py-0.5 select-text font-mono text-[12px] ${textColor}`}>
+        {line}
+      </div>
+    );
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -152,97 +181,89 @@ export default function LogsViewer({ repoName, githubToken, isOpen, onClose }: L
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
-          className="relative w-full max-w-xl mx-auto h-[75vh] bg-[#0a0a0a] border-t border-[#00D4FF]/20 rounded-t-3xl shadow-2xl flex flex-col overflow-hidden z-[151] select-text font-sans"
+          className="relative w-full max-w-xl mx-auto h-[75vh] bg-[#0D1117] border-t border-[rgba(255,255,255,0.08)] rounded-t-3xl shadow-2xl flex flex-col overflow-hidden z-[151] select-text font-sans"
         >
           {/* Drag Handle Bar */}
           <div className="w-full flex justify-center py-3 cursor-grab shrink-0">
-            <div className="w-12 h-1.5 bg-neutral-600 rounded-full" />
+            <div className="w-12 h-1.5 bg-[#484F58] rounded-full" />
           </div>
 
           {/* Header */}
-          <div className="px-4 pb-3 border-b border-[#00D4FF]/10 flex items-center justify-between shrink-0">
-            <h3 className="font-display font-extrabold text-[#F0F6FF] text-xs sm:text-sm tracking-wider uppercase truncate max-w-[80%]">
+          <div className="px-4 pb-3 border-b border-[rgba(255,255,255,0.08)] flex items-center justify-between shrink-0">
+            <h3 className="font-display font-extrabold text-[#F0F6FC] text-xs sm:text-sm tracking-wider uppercase truncate max-w-[80%]">
               LIVE LOGS — {repoName}
             </h3>
             <button
               onClick={onClose}
-              className="p-2 -mr-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              className="p-2 -mr-2 rounded-lg hover:bg-white/5 text-[#8B949E] hover:text-[#F0F6FC] transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Body terminal panel */}
-          <div className="flex-1 p-4 overflow-y-auto bg-[#0a0a0a] font-mono text-[11px] sm:text-xs text-[#00FF88] flex flex-col justify-between">
-            <div className="flex-1">
+          <div className="flex-1 p-4 overflow-y-auto bg-[#080C14] font-mono text-[12px] flex flex-col">
+            <div className="flex-grow flex flex-col">
               {loading ? (
-                <div className="h-full min-h-[150px] flex flex-col items-center justify-center gap-3">
+                <div className="flex-1 flex flex-col items-center justify-center gap-3">
                   <Loader2 className="w-6 h-6 text-[#00D4FF] animate-spin" />
-                  <span className="text-neutral-400 font-mono">Fetching logs...</span>
+                  <span className="text-[#8B949E] font-mono text-[12px]">Fetching logs...</span>
                 </div>
               ) : error ? (
-                <div className="p-3.5 rounded-xl border border-rose-500/10 bg-rose-500/5 flex flex-col items-center justify-center gap-3 text-center my-6">
-                  <AlertCircle className="w-6 h-6 text-rose-400" />
-                  <div>
-                    <span className="text-rose-400 block font-bold uppercase text-[10px] tracking-widest mb-1">
-                      CONNECTION ERROR
-                    </span>
-                    <p className="text-neutral-400 max-w-xs">{error}</p>
+                <div className="flex-1 flex flex-col gap-4">
+                  {/* Compact 60px error banner */}
+                  <div className="h-[60px] flex items-center gap-2.5 px-4 bg-[#F85149]/10 border border-[#F85149]/30 text-[#F85149] rounded-xl text-[12px] shrink-0">
+                    <AlertCircle className="w-4 h-4 text-[#F85149] shrink-0" />
+                    <span className="truncate text-[12px] font-medium">{error}</span>
+                  </div>
+
+                  {/* Terminal panel filling remaining height */}
+                  <div className="flex-grow bg-[#0D1117] border border-[rgba(255,255,255,0.08)] rounded-xl flex items-center justify-center p-4">
+                    <span className="text-[#484F58] font-mono text-xs">No logs available</span>
                   </div>
                 </div>
               ) : isZip ? (
-                <div className="p-5 border border-[#00D4FF]/20 bg-[#00D4FF]/5 rounded-xl flex flex-col items-center justify-center gap-4 text-center my-6">
-                  <div className="w-10 h-10 rounded-full bg-[#00D4FF]/10 flex items-center justify-center">
+                <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center py-8">
+                  <div className="w-10 h-10 rounded-full bg-[rgba(0,212,255,0.1)] flex items-center justify-center">
                     <Loader2 className="w-5 h-5 text-[#00D4FF] animate-spin" />
                   </div>
                   <div className="space-y-1">
                     <p className="text-[#00D4FF] font-bold text-sm">Logs downloading</p>
-                    <p className="text-neutral-400 text-[11px]">
+                    <p className="text-[#8B949E] text-[11px]">
                       GitHub has packaged the active log stream into a ZIP file.
                     </p>
                   </div>
-                  <a
-                    href={`https://github.com/${owner}/${repo}/actions`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 px-4 py-2 bg-[#00D4FF] hover:bg-[#00D4FF]/80 text-[#050B18] font-bold rounded-lg transition-colors text-xs"
-                  >
-                    Tap to open in GitHub <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
                 </div>
               ) : (
-                <div className="whitespace-pre-wrap leading-relaxed select-text pr-2">
-                  {logs}
+                <div className="whitespace-pre-wrap leading-relaxed select-text pr-2 text-[#F0F6FC]">
+                  {logs.split('\n').map((line, idx) => renderLogLine(line, idx))}
                 </div>
               )}
               <div ref={terminalEndRef} />
             </div>
-
-            {/* Always Show Fallback GitHub actions link at the bottom */}
-            <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between text-[10px] text-neutral-500 font-mono shrink-0">
-              <span>FALLBACK LINK</span>
-              <a
-                href={`https://github.com/${owner}/${repo}/actions`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[#00D4FF] hover:underline flex items-center gap-1"
-              >
-                github.com/{repoName}/actions <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
           </div>
 
-          {/* Footer */}
-          <div className="p-4 border-t border-[#00D4FF]/10 bg-[#0a0a0a] shrink-0 flex items-center gap-3">
+          {/* Footer - Always visible, sticky bottom */}
+          <div className="p-4 border-t border-[rgba(255,255,255,0.08)] bg-[#0D1117] shrink-0 grid grid-cols-2 gap-3">
+            <a
+              href={`https://github.com/${owner}/${repo}/actions`}
+              target="_blank"
+              rel="noreferrer"
+              className="h-11 rounded-xl bg-transparent border border-[rgba(255,255,255,0.08)] text-[#8B949E] hover:text-[#F0F6FC] hover:border-white/20 font-sans text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Open in GitHub</span>
+            </a>
+            
             <button
               onClick={() => {
                 setTrigger(prev => prev + 1);
               }}
               disabled={loading}
-              className="w-full h-11 rounded-xl bg-[#00D4FF]/15 border border-[#00D4FF]/30 text-[#00D4FF] hover:bg-[#00D4FF]/25 font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+              className="h-11 rounded-xl bg-[#00D4FF] text-[#080C14] hover:bg-[#00D4FF]/90 font-sans text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Refresh Logs
+              <span>Refresh</span>
             </button>
           </div>
         </motion.div>

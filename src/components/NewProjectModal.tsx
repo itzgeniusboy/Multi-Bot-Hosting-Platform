@@ -190,73 +190,93 @@ export default function NewProjectModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ type: 'spring', duration: 0.5 }}
-        className="w-full max-w-4xl premium-glass-card rounded-3xl border border-[#00D4FF]/20 bg-[#0A1628]/95 shadow-[0_30px_100px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.05)] relative overflow-hidden z-10 flex flex-col max-h-[90vh]"
+        className="w-full max-w-[560px] premium-glass-card rounded-3xl border border-[rgba(255,255,255,0.08)] bg-[#0D1117] shadow-[0_30px_100px_rgba(0,0,0,0.8)] relative overflow-hidden z-10 flex flex-col max-h-[90vh]"
       >
         {/* Subtle grid decoration inside modal */}
         <div className="absolute inset-0 card-grid-pattern opacity-5 pointer-events-none"></div>
 
         {/* Modal Header */}
-        <div className="p-6 border-b border-[#00D4FF]/10 flex items-center justify-between relative z-10 shrink-0">
+        <div className="px-6 py-4 border-b border-[rgba(255,255,255,0.08)] flex items-center justify-between relative z-10 shrink-0 bg-[#0D1117]">
           <div className="flex items-center gap-3">
             {step !== 'select_repo' && step !== 'live' && (
               <button
                 onClick={() => setStep(step === 'configure' ? 'select_repo' : 'configure')}
-                className="p-1.5 rounded-lg border border-[#00D4FF]/10 hover:border-[#00D4FF]/30 hover:bg-[#00D4FF]/5 text-[#4A6080] hover:text-white transition-all cursor-pointer"
+                className="p-1.5 rounded-lg border border-[rgba(255,255,255,0.08)] hover:bg-white/5 text-[#8B949E] hover:text-white transition-all cursor-pointer shrink-0"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
             )}
-            <div className="space-y-0.5">
-              <span className="text-[10px] font-mono tracking-widest text-[#00D4FF] uppercase font-bold">
-                // CREATING NEW PROJECT
-              </span>
-              <h2 className="text-sm font-display font-extrabold text-[#F0F6FF] tracking-wider">
-                GitHub Action Bot Setup
-              </h2>
-            </div>
+            <h2 className="text-[18px] font-bold text-[#F0F6FC] tracking-tight">
+              {step === 'select_repo' ? 'Import Repository' : step === 'configure' ? 'Configure Environment' : step === 'deploying' ? 'Deploying Bot Node' : 'Project is Live'}
+            </h2>
           </div>
 
           <button
             onClick={handleClose}
-            className="p-2 rounded-xl border border-[#00D4FF]/10 hover:border-[#00D4FF]/30 hover:bg-[#00D4FF]/5 text-[#4A6080] hover:text-white transition-all cursor-pointer"
+            className="p-2 rounded-xl border border-[rgba(255,255,255,0.08)] hover:bg-white/5 text-[#8B949E] hover:text-white transition-all cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Step Path Progress Indicators */}
-        <div className="px-6 py-3 bg-[#050B18]/40 border-b border-[#00D4FF]/5 flex items-center gap-6 shrink-0 overflow-x-auto scrollbar-none">
-          {stepsList.map((st, i) => {
-            const IconComponent = st.icon;
-            const isActive = step === st.key;
-            const isCompleted = 
-              (step === 'configure' && i < 1) ||
-              (step === 'deploying' && i < 2) ||
-              (step === 'live' && i < 3);
+        <div className="px-6 py-4 bg-[#080C14] border-b border-[rgba(255,255,255,0.08)] shrink-0 flex flex-col items-center justify-center min-h-[60px]">
+          {/* Mobile view indicator */}
+          <div className="sm:hidden text-xs font-mono text-[#8B949E] tracking-widest uppercase">
+            Step {step === 'select_repo' ? 1 : step === 'configure' ? 2 : step === 'deploying' ? 3 : 4} of 4: <span className="text-[#00D4FF] font-bold">
+              {step === 'select_repo' ? 'Select Repo' : step === 'configure' ? 'Configure' : step === 'deploying' ? 'Deploy' : 'Live'}
+            </span>
+          </div>
 
-            return (
-              <React.Fragment key={st.key}>
-                <div 
-                  className={`items-center gap-2 shrink-0 animate-step-slide ${isActive ? 'flex' : 'hidden sm:flex'}`}
-                  style={{ animationDelay: `${i * 80}ms` }}
-                >
-                  <div className={`flex items-center gap-1.5 text-[10px] font-mono font-bold tracking-wider ${
-                    isActive
-                      ? 'text-[#00D4FF]'
-                      : isCompleted
-                      ? 'text-emerald-400'
-                      : 'text-[#4A6080]'
+          {/* Desktop progress bar */}
+          <div className="hidden sm:flex items-center justify-between w-full max-w-[360px] relative">
+            {/* Background connection line */}
+            <div className="absolute top-[14px] left-0 right-0 h-[2px] bg-[rgba(255,255,255,0.08)] z-0" />
+            
+            {/* Done/Active connection line overlay */}
+            <div 
+              className="absolute top-[14px] left-0 h-[2px] bg-[#3FB950] transition-all duration-300 z-0"
+              style={{
+                width: 
+                  step === 'select_repo' ? '0%' :
+                  step === 'configure' ? '33.33%' :
+                  step === 'deploying' ? '66.66%' :
+                  '100%'
+              }}
+            />
+
+            {stepsList.map((st, i) => {
+              const isActive = step === st.key;
+              const isCompleted = 
+                (step === 'configure' && i < 1) ||
+                (step === 'deploying' && i < 2) ||
+                (step === 'live' && i < 3);
+
+              const shortLabels = ['SELECT', 'CONFIG', 'DEPLOY', 'LIVE'];
+
+              return (
+                <div key={st.key} className="flex flex-col items-center z-10 relative">
+                  {/* Circle (28px diameter) */}
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-extrabold transition-all duration-300 ${
+                    isCompleted
+                      ? 'bg-[#3FB950] text-[#080C14]'
+                      : isActive
+                      ? 'bg-[#00D4FF] text-[#080C14] ring-4 ring-[#00D4FF]/25'
+                      : 'bg-[#161B22] text-[#484F58] border border-[rgba(255,255,255,0.08)]'
                   }`}>
-                    <IconComponent className="w-3.5 h-3.5" />
-                    <span>{st.label}</span>
+                    {isCompleted ? '✓' : i + 1}
                   </div>
+                  
+                  {/* Label (10px, muted) */}
+                  <span className={`text-[10px] font-semibold mt-1 transition-colors duration-300 font-sans tracking-wide ${
+                    isActive ? 'text-[#00D4FF]' : isCompleted ? 'text-[#3FB950]' : 'text-[#484F58]'
+                  }`}>
+                    {shortLabels[i]}
+                  </span>
                 </div>
-                {i < stepsList.length - 1 && (
-                  <span className={`text-[10px] font-mono text-[#4A6080]/40 ${isActive ? 'inline' : 'hidden sm:inline'}`}>/</span>
-                )}
-              </React.Fragment>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
         {/* Content Section with motion transitions */}

@@ -8,6 +8,8 @@ interface Repo {
   full_name: string;
   private: boolean;
   default_branch: string;
+  language?: string;
+  stargazers_count?: number;
 }
 
 interface RepoSelectorProps {
@@ -20,9 +22,9 @@ interface RepoSelectorProps {
 
 // Fallback high-fidelity demo repositories if the user's GitHub list is empty
 const DEMO_REPOS: Repo[] = [
-  { id: 'demo-1', name: 'telegram-support-agent', full_name: 'sandbox/telegram-support-agent', private: true, default_branch: 'main' },
-  { id: 'demo-2', name: 'movie-recommender-bot', full_name: 'sandbox/movie-recommender-bot', private: false, default_branch: 'master' },
-  { id: 'demo-3', name: 'feedback-moderator', full_name: 'sandbox/feedback-moderator', private: true, default_branch: 'main' },
+  { id: 'demo-1', name: 'telegram-support-agent', full_name: 'sandbox/telegram-support-agent', private: true, default_branch: 'main', language: 'Python', stargazers_count: 5 },
+  { id: 'demo-2', name: 'movie-recommender-bot', full_name: 'sandbox/movie-recommender-bot', private: false, default_branch: 'master', language: 'TypeScript', stargazers_count: 12 },
+  { id: 'demo-3', name: 'feedback-moderator', full_name: 'sandbox/feedback-moderator', private: true, default_branch: 'main', language: 'JavaScript', stargazers_count: 3 },
 ];
 
 interface RepoCardProps {
@@ -34,58 +36,48 @@ interface RepoCardProps {
 
 function RepoCard({ repo, isSelected, onSelect, index }: RepoCardProps) {
   const tiltRef = use3DTilt(true);
+  const lang = repo.language || 'TypeScript';
+  const stars = repo.stargazers_count !== undefined ? repo.stargazers_count : 2;
 
   return (
     <div
       ref={tiltRef}
       onClick={() => onSelect(repo.full_name)}
       style={{ animationDelay: `${index * 80}ms` }}
-      className={`animate-card-fade-in p-4 rounded-xl border transition-all duration-300 flex items-center justify-between cursor-pointer group relative ${
+      className={`animate-card-fade-in h-[72px] px-4 rounded-xl border transition-all duration-300 flex items-center justify-between cursor-pointer group relative ${
         isSelected
-          ? 'bg-[#00D4FF]/8 border-[#00D4FF] border-l-4 border-l-[#00D4FF] shadow-[0_0_20px_rgba(0,212,255,0.08)]'
-          : 'bg-[#050B18]/40 border-[#00D4FF]/10 hover:border-[#00D4FF]/30 hover:bg-[#00D4FF]/2'
+          ? 'bg-[#00D4FF]/10 border-l-[3px] border-l-[#00D4FF] border-y-[rgba(0,212,255,0.3)] border-r-[rgba(0,212,255,0.3)] shadow-[0_0_15px_rgba(0,212,255,0.06)]'
+          : 'bg-[#0D1117] border-[rgba(255,255,255,0.08)] hover:border-white/20 hover:bg-[#161B22]'
       }`}
     >
-      {/* Checkmark in top-right corner */}
-      {isSelected && (
-        <div className="absolute top-2.5 right-2.5 text-[#00D4FF]">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </div>
-      )}
-
-      <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-lg border transition-colors ${
-          isSelected ? 'bg-[#00D4FF]/10 border-[#00D4FF]/20 text-[#00D4FF]' : 'bg-[#050B18]/80 border-[#00D4FF]/5 text-[#4A6080] group-hover:text-white'
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`p-1.5 rounded-lg border shrink-0 ${
+          isSelected ? 'bg-[#00D4FF]/10 border-[#00D4FF]/20 text-[#00D4FF]' : 'bg-[#161B22] border-[rgba(255,255,255,0.08)] text-[#8B949E]'
         }`}>
-          <Github className="w-4 h-4" />
+          <Github className="w-5 h-5" />
         </div>
-        <div className="space-y-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-mono font-bold text-[#F0F6FF] group-hover:text-[#00D4FF] transition-colors truncate max-w-[130px] sm:max-w-[180px]" title={repo.name}>
-              {repo.name}
-            </span>
-            <span className="text-[9px] font-mono tracking-widest px-1.5 py-0.5 rounded-full bg-[#050B18]/80 border border-[#00D4FF]/10 text-[#4A6080] flex items-center gap-1">
-              {repo.private ? <Lock className="w-2 h-2 text-rose-400" /> : <Globe className="w-2 h-2 text-emerald-400" />}
-              {repo.private ? 'Private' : 'Public'}
-            </span>
+        <div className="space-y-0.5 min-w-0">
+          <div className="text-[14px] font-bold text-[#F0F6FC] truncate group-hover:text-[#00D4FF] transition-colors" title={repo.full_name}>
+            {repo.name}
           </div>
-          <div className="flex items-center gap-1.5 text-[10px] text-[#4A6080] font-mono">
-            <GitBranch className="w-3 h-3 text-[#4A6080]" />
-            <span>{repo.default_branch}</span>
+          <div className="text-[12px] text-[#8B949E] font-mono flex items-center gap-2">
+            <span>{lang}</span>
+            <span className="text-[#484F58]">•</span>
+            <span>★ {stars}</span>
           </div>
         </div>
       </div>
 
-      <div
-        className={`px-3 py-1.5 rounded-lg font-mono text-[10px] font-bold tracking-wider uppercase transition-all flex items-center gap-1 shrink-0 whitespace-nowrap ${
-          isSelected
-            ? 'bg-[#00D4FF]/20 text-[#00D4FF]'
-            : 'bg-[#050B18]/60 text-[#4A6080] group-hover:text-white'
-        }`}
-      >
-        {isSelected ? 'Selected' : 'Select'}
+      <div className="shrink-0 ml-4">
+        {isSelected ? (
+          <span className="px-3 py-1 rounded-full text-[11px] font-bold text-[#3FB950] border border-[#3FB950]/25 bg-[#3FB950]/10 flex items-center gap-1 select-none">
+            SELECTED ✓
+          </span>
+        ) : (
+          <span className="px-3 py-1 rounded-full text-[11px] font-bold text-[#00D4FF] border border-[#00D4FF]/25 bg-transparent group-hover:bg-[#00D4FF]/10 transition-colors">
+            IMPORT →
+          </span>
+        )}
       </div>
     </div>
   );
@@ -166,19 +158,18 @@ export default function RepoSelector({
       )}
 
       {/* Continue Button */}
-      <div className="pt-4 border-t border-[#00D4FF]/10 flex justify-end">
+      <div className="pt-4 border-t border-[rgba(255,255,255,0.08)] flex justify-end">
         <button
           type="button"
           onClick={onNext}
           disabled={!selectedRepo}
-          className={`w-full py-3 rounded-xl font-sans text-xs font-bold uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${
+          className={`px-6 h-11 rounded-xl font-sans text-xs font-bold uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${
             selectedRepo
-              ? 'bg-[#00D4FF] text-[#050B18] hover:bg-[#00D4FF]/90 shadow-lg shadow-[#00D4FF]/10'
-              : 'bg-[#0A1628] border border-[#00D4FF]/10 text-[#4A6080] opacity-40 pointer-events-none'
+              ? 'bg-[#00D4FF] text-[#080C14] hover:bg-[#00D4FF]/90'
+              : 'bg-[#161B22] border border-[rgba(255,255,255,0.08)] text-[#484F58] opacity-40 pointer-events-none'
           }`}
         >
-          Continue to Configuration
-          <ChevronRight className="w-4 h-4" />
+          <span>CONTINUE →</span>
         </button>
       </div>
     </div>

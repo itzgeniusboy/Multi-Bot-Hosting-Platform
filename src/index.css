@@ -6,15 +6,20 @@
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
   
-  --color-bg-space: #050B18;
-  --color-surface-card: #0A1628;
-  --color-primary-cyan: #00D4FF;
-  --color-secondary-violet: #7C3AED;
-  --color-success-green: #00FF87;
-  --color-danger-rose: #FF3B6B;
-  --color-text-primary: #F0F6FF;
-  --color-text-muted: #4A6080;
-  --color-border-cyan: rgba(0, 212, 255, 0.12);
+  --color-bg-base: #080C14;
+  --color-bg-card: #0D1117;
+  --color-bg-elevated: #161B22;
+  --color-border-custom: rgba(255, 255, 255, 0.08);
+  --color-border-active: rgba(0, 212, 255, 0.4);
+  --color-text-primary: #F0F6FC;
+  --color-text-secondary: #8B949E;
+  --color-text-muted: #484F58;
+  --color-accent: #00D4FF;
+  --color-accent-dim: rgba(0, 212, 255, 0.1);
+  --color-success: #3FB950;
+  --color-warning: #D29922;
+  --color-danger: #F85149;
+  --color-danger-dim: rgba(248, 81, 73, 0.1);
 }
 
 /* Webkit Scrollbars Custom Theme */

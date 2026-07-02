@@ -352,21 +352,21 @@ export default function ProjectConfigForm({
           </div>
 
           {/* Action Buttons */}
-          <div className="space-y-3 pt-2">
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex-1 h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-transparent text-[#8B949E] hover:text-[#F0F6FC] hover:bg-white/5 font-sans text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+            >
+              BACK
+            </button>
             <button
               type="button"
               onClick={onSubmit}
               disabled={isSubmitDisabled}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#00D4FF] to-[#7C3AED] text-[#050B18] hover:opacity-95 active:scale-[0.99] transition-all font-sans text-xs font-bold uppercase tracking-widest text-white shadow-lg shadow-[#00D4FF]/10 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+              className="flex-1 h-11 rounded-xl bg-[#00D4FF] text-[#080C14] hover:bg-[#00D4FF]/90 font-sans text-xs font-bold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Commit & Setup Bot
-            </button>
-            <button
-              type="button"
-              onClick={onBack}
-              className="w-full py-3 rounded-xl border border-[#00D4FF]/10 hover:border-[#00D4FF]/30 hover:bg-[#00D4FF]/2 font-mono text-[10px] text-[#4A6080] hover:text-white uppercase tracking-wider transition-all cursor-pointer"
-            >
-              Back to Repository
+              CONTINUE
             </button>
           </div>
         </div>
