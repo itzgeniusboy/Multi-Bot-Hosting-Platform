@@ -104,8 +104,18 @@ export default function DeploymentConsole({
         });
 
         if (!wfResp.ok) {
-          const wfErrData = await wfResp.json();
-          throw new Error(wfErrData.error || 'Failed to setup GitHub workflow file.');
+          let errMsg = '';
+          try {
+            const wfErrData = await wfResp.json();
+            errMsg = wfErrData.error || wfErrData.message || JSON.stringify(wfErrData);
+          } catch {
+            try {
+              errMsg = await wfResp.text();
+            } catch {
+              errMsg = `HTTP error ${wfResp.status}`;
+            }
+          }
+          throw new Error(errMsg || 'Failed to setup GitHub workflow file.');
         }
 
         const wfData = await wfResp.json();
@@ -147,8 +157,18 @@ export default function DeploymentConsole({
             });
 
             if (!secResp.ok) {
-              const secErrData = await secResp.json();
-              throw new Error(secErrData.error || `Failed to encrypt and save secret ${sec.key}`);
+              let errMsg = '';
+              try {
+                const secErrData = await secResp.json();
+                errMsg = secErrData.error || secErrData.message || JSON.stringify(secErrData);
+              } catch {
+                try {
+                  errMsg = await secResp.text();
+                } catch {
+                  errMsg = `HTTP error ${secResp.status}`;
+                }
+              }
+              throw new Error(errMsg || `Failed to encrypt and save secret ${sec.key}`);
             }
             addLog(`Secret ${sec.key} securely bound to repository secrets context.`, 'success');
             await new Promise((r) => setTimeout(r, 300));
@@ -177,8 +197,18 @@ export default function DeploymentConsole({
         });
 
         if (!regResp.ok) {
-          const regErrData = await regResp.json();
-          throw new Error(regErrData.error || 'Failed to register bot project in system state.');
+          let errMsg = '';
+          try {
+            const regErrData = await regResp.json();
+            errMsg = regErrData.error || regErrData.message || JSON.stringify(regErrData);
+          } catch {
+            try {
+              errMsg = await regResp.text();
+            } catch {
+              errMsg = `HTTP error ${regResp.status}`;
+            }
+          }
+          throw new Error(errMsg || 'Failed to register bot project in system state.');
         }
 
         const projectData = await regResp.json();
@@ -200,8 +230,18 @@ export default function DeploymentConsole({
         });
 
         if (!startResp.ok) {
-          const startErr = await startResp.json();
-          throw new Error(startErr.error || 'Failed to trigger starting workflow run on GitHub.');
+          let errMsg = '';
+          try {
+            const startErr = await startResp.json();
+            errMsg = startErr.error || startErr.message || JSON.stringify(startErr);
+          } catch {
+            try {
+              errMsg = await startResp.text();
+            } catch {
+              errMsg = `HTTP error ${startResp.status}`;
+            }
+          }
+          throw new Error(errMsg || 'Failed to trigger starting workflow run on GitHub.');
         }
 
         updateStage('launch', 'success');

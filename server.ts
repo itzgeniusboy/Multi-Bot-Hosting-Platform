@@ -665,18 +665,20 @@ app.post("/api/workflow/setup", async (req, res) => {
       return res.status(rateResp.status).json({ error: `Invalid GitHub Token pre-flight check failed: ${rateErrText}` });
     }
 
-    const scopesHeader = rateResp.headers.get("X-OAuth-Scopes") || "";
-    const scopes = scopesHeader.split(",").map(s => s.trim().toLowerCase());
-    const hasRepo = scopes.includes("repo");
-    const hasWorkflow = scopes.includes("workflow");
+    const scopesHeader = rateResp.headers.get("X-OAuth-Scopes");
+    if (scopesHeader !== null) {
+      const scopes = scopesHeader.split(",").map(s => s.trim().toLowerCase());
+      const hasRepo = scopes.includes("repo");
+      const hasWorkflow = scopes.includes("workflow");
 
-    if (!hasRepo || !hasWorkflow) {
-      return res.status(400).json({
-        error: "CRITICAL: Your GitHub Token is missing the mandatory 'workflow' or 'repo' permissions."
-      });
+      if (!hasRepo || !hasWorkflow) {
+        return res.status(400).json({
+          error: `CRITICAL: Your GitHub Token is missing the mandatory 'workflow' or 'repo' permissions. Found scopes: ${scopesHeader || 'none'}`
+        });
+      }
     }
   } catch (err: any) {
-    return res.status(500).json({ error: `Failed to run token pre-flight validation: ${err.message}` });
+    return res.status(500).json({ error: `Failed to run token pre-flight validation: ${err?.message || String(err)}` });
   }
 
   const workflowYml = `name: 24x7 Bot Runner
@@ -764,17 +766,29 @@ jobs:
 
     res.json({ success: true, message: "Workflow .github/workflows/mbhp_bot.yml successfully committed!" });
   } catch (err: any) {
-    if (err.message && err.message.includes("GITHUB_WRITE_FORBIDDEN_403")) {
+    const errMsg = err?.message || String(err) || "";
+    
+    if (errMsg.includes("workflow scope") || errMsg.includes("workflow")) {
+      return res.status(422).json({
+        error: "Your Classic Personal Access Token is missing the 'workflow' scope. Please edit your token on GitHub and enable the 'workflow' checkbox under Developer Settings."
+      });
+    }
+    if (errMsg.includes("Resource not accessible")) {
       return res.status(403).json({
-        error: "Repository Workflow Read/Write Restriction: Workflow write forbidden."
+        error: "Your Fine-grained Personal Access Token is missing the 'Workflows' permission. Please edit your token on GitHub, and under Repository Permissions, grant Read & Write access to 'Workflows'."
       });
     }
-    if (err.message && err.message.includes("GITHUB_WRITE_NOT_FOUND_404")) {
+    if (errMsg.includes("GITHUB_WRITE_FORBIDDEN_403") || errMsg.includes("403")) {
+      return res.status(403).json({
+        error: "Access Denied (403): Your token does not have write access to this repository or lacks the 'workflow' permission. For Classic Tokens, check 'workflow' and 'repo'. For Fine-grained, check 'Workflows' (Read & Write)."
+      });
+    }
+    if (errMsg.includes("GITHUB_WRITE_NOT_FOUND_404") || errMsg.includes("404")) {
       return res.status(404).json({
-        error: "Repository not found or token lacks write access to .github/workflows/."
+        error: "Repository Not Found (404): Please verify that your repository name is spelled correctly and that your token has access to this repository."
       });
     }
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: errMsg });
   }
 });
 
