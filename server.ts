@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import sodium from "libsodium-wrappers";
 
 const app = express();
 const PORT = 3000;
@@ -598,243 +599,279 @@ app.post("/api/projects/delete", (req, res) => {
   res.json({ success: true, message: "Project deleted from dashboard" });
 });
 
-app.get("/api/validate-token", async (req, res) => {
-  const token = req.query.token as string;
-  if (!token) {
-    return res.status(400).json({ valid: false, error: "Missing token" });
+app.post("/api/workflow/setup", async (req, res) => {
+  const { repo_name, github_token } = req.body;
+  if (!repo_name || !github_token) {
+    return res.status(400).json({ error: "Missing repo_name or github_token" });
   }
+
+  const workflowYml = `name: 24x7 Bot Runner
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+  push:
+    branches: [ main, master, dev ]
+
+concurrency:
+  group: bot-runner-\${{ github.repository }}
+  cancel-in-progress: true
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          elif [ -f package.json ]; then
+            sudo apt-get install -y nodejs npm
+            npm install
+          else
+            pip install pyTelegramBotAPI telebot aiogram httpx
+          fi
+
+      - name: Run Bot Node
+        env:
+          BOT_TOKEN: \${{ secrets.BOT_TOKEN }}
+        run: |
+          RUN_COMMAND="\${{ secrets.RUN_COMMAND }}"
+          if [ -z "$RUN_COMMAND" ]; then
+            if [ -f main.py ]; then RUN_COMMAND="python main.py"
+            elif [ -f bot.py ]; then RUN_COMMAND="python bot.py"
+            elif [ -f index.js ]; then RUN_COMMAND="node index.js"
+            elif [ -f package.json ]; then RUN_COMMAND="npm start"
+            else RUN_COMMAND="python main.py"
+            fi
+          fi
+          echo "Executing start command: $RUN_COMMAND"
+          eval $RUN_COMMAND
+`;
+
   try {
-    const getMeUrl = `https://api.telegram.org/bot${token}/getMe`;
-    const response = await fetch(getMeUrl);
-    const result: any = await response.json();
-    if (response.status === 200 && result.ok) {
-      return res.json({ valid: true, username: result.result?.username });
+    await commitGitHubFile(
+      github_token,
+      repo_name,
+      ".github/workflows/bot.yml",
+      workflowYml,
+      "[Platform] Setup 24x7 Continuous Bot Runner Workflow"
+    );
+
+    const existingIdx = projects.findIndex((p) => p.repo_name === repo_name);
+    const newProj: Project = {
+      id: repo_name.replace("/", "-"),
+      repo_name,
+      bot_token: "",
+      script_name: "bot.yml",
+      username: repo_name.split("/")[1],
+      status: "offline",
+      created_at: new Date().toISOString(),
+      request_count: 0,
+      started_at: undefined,
+      health: 'healthy',
+    };
+
+    if (existingIdx === -1) {
+      projects.push(newProj);
     } else {
-      return res.json({ valid: false, error: result.description || "Invalid token" });
+      projects[existingIdx].status = "offline";
     }
-  } catch (e: any) {
-    return res.json({ valid: false, error: e.message });
+    saveProjects(projects);
+
+    res.json({ success: true, message: "Workflow .github/workflows/bot.yml successfully committed!" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.get("/api/stats", (req, res) => {
-  const onlineProjects = projects.filter(p => p.status === "online");
-  const activeNodes = onlineProjects.length;
-  const totalRequests = projects.reduce((sum, p) => sum + p.request_count, 0) + 1482;
-  
-  const cpuJitter = (Math.random() * 2) - 1;
-  const cpu = Math.max(1.0, parseFloat((1.5 + activeNodes * 5.2 + cpuJitter).toFixed(1)));
-  
-  const memJitter = (Math.random() * 4) - 2;
-  const memory = Math.max(10.0, parseFloat((42.0 + activeNodes * 15.4 + memJitter).toFixed(1)));
-  
-  const latJitter = Math.floor(Math.random() * 10) - 5;
-  const latency = Math.max(10, 75 + latJitter);
-  
-  res.json({
-    cpu,
-    memory,
-    latency,
-    totalRequests,
-    activeNodes,
-    status: "healthy"
-  });
-});
-
-app.post("/api/launch", async (req, res) => {
-  const { repo_name, bot_token, script_name, github_token } = req.body;
-
-  if (!repo_name || !bot_token || !script_name || !github_token) {
-    return res.status(400).json({ success: false, detail: "Missing required deployment fields" });
-  }
-
-  // Select script content
-  let pyContent = MOVIE_BOT_PY;
-  let actualScript = "movie_bot";
-  if (script_name.includes("movie")) {
-    pyContent = MOVIE_BOT_PY;
-    actualScript = "movie_bot";
-  } else if (script_name.includes("management") || script_name.includes("support")) {
-    pyContent = SUPPORT_BOT_PY;
-    actualScript = "management_bot";
-  } else if (script_name.includes("feedback") || script_name.includes("custom_mod")) {
-    pyContent = FEEDBACK_BOT_PY;
-    actualScript = "custom_mod_bot";
+app.post("/api/secrets/set", async (req, res) => {
+  const { repo_name, secret_name, secret_value, github_token } = req.body;
+  if (!repo_name || !secret_name || !secret_value || !github_token) {
+    return res.status(400).json({ error: "Missing required fields" });
   }
 
   try {
-    // 1. Verify Bot Token first
-    const getMeUrl = `https://api.telegram.org/bot${bot_token}/getMe`;
-    const meResponse = await fetch(getMeUrl);
-    const meResult: any = await meResponse.json();
+    const headers = {
+      Authorization: `token ${github_token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "telegram-bot-backend",
+    };
 
-    if (meResponse.status !== 200 || !meResult.ok) {
-      const errorDesc = meResult.description || "Invalid Bot Token";
-      return res.status(400).json({
-        success: false,
-        message: `Failed to verify token: ${errorDesc}`,
-      });
+    const pubKeyResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/secrets/public-key`, { headers });
+    if (pubKeyResp.status !== 200) {
+      const text = await pubKeyResp.text();
+      return res.status(pubKeyResp.status).json({ error: `Failed to fetch public key: ${text}` });
     }
+    const pubKeyData: any = await pubKeyResp.json();
+    const { key_id, key: publicKeyBase64 } = pubKeyData;
 
-    const botUsername = meResult.result?.username || "UnknownBot";
+    await sodium.ready;
+    const binSecret = sodium.from_string(secret_value);
+    const binKey = sodium.from_base64(publicKeyBase64);
+    const encryptedBytes = sodium.crypto_box_seal(binSecret, binKey);
+    const encrypted_value = sodium.to_base64(encryptedBytes);
 
-    // Delete webhook on Telegram's end so actions polling can run instantly
-    const delWebhookUrl = `https://api.telegram.org/bot${bot_token}/deleteWebhook`;
-    await fetch(delWebhookUrl, { method: "POST" });
-
-    // 2. Commit workflow file
-    console.log(`Committing run_bot.yml to ${repo_name}...`);
-    await commitGitHubFile(
-      github_token,
-      repo_name,
-      ".github/workflows/run_bot.yml",
-      RUN_BOT_YML,
-      "[Platform Multi-Bot] Injected 24x7 runner workflow"
-    );
-
-    // 3. Commit bot script file
-    console.log(`Committing templates/${actualScript}.py to ${repo_name}...`);
-    await commitGitHubFile(
-      github_token,
-      repo_name,
-      `templates/${actualScript}.py`,
-      pyContent,
-      `[Platform Multi-Bot] Injected script template for ${actualScript}`
-    );
-
-    // 4. Dispatch repository trigger
-    console.log(`Triggering repository_dispatch for ${repo_name}...`);
-    const dispatchUrl = `https://api.github.com/repos/${repo_name}/dispatches`;
-    const dispatchResp = await fetch(dispatchUrl, {
-      method: "POST",
+    const putSecretResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/secrets/${secret_name}`, {
+      method: "PUT",
       headers: {
-        Authorization: `token ${github_token}`,
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "telegram-bot-backend",
+        ...headers,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        event_type: "launch_bot",
-        client_payload: {
-          bot_token: bot_token,
-          script_name: actualScript,
-          github_pat: github_token,
-        },
+        encrypted_value,
+        key_id,
       }),
     });
 
-    if (dispatchResp.status !== 204) {
-      const errText = await dispatchResp.text();
-      return res.status(dispatchResp.status).json({
-        success: false,
-        message: `Injected code files but failed to dispatch: ${errText}`,
-      });
+    if (putSecretResp.status !== 201 && putSecretResp.status !== 204) {
+      const text = await putSecretResp.text();
+      return res.status(putSecretResp.status).json({ error: `Failed to set secret: ${text}` });
     }
 
-    const existingIdx = projects.findIndex((p) => p.repo_name === repo_name);
-    const newProj = {
-      id: repo_name.replace("/", "-"),
-      repo_name,
-      bot_token,
-      script_name: actualScript,
-      username: botUsername,
-      status: "online" as const,
-      created_at: new Date().toISOString(),
-      started_at: new Date().toISOString(),
-      request_count: existingIdx !== -1 ? projects[existingIdx].request_count : 0,
-      last_request_time: existingIdx !== -1 ? projects[existingIdx].last_request_time : undefined,
+    res.json({ success: true, message: `Secret ${secret_name} successfully set on GitHub!` });
+  } catch (err: any) {
+    console.error("Failed to set GitHub secret:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/workflow/status", async (req, res) => {
+  const { repo_name, github_token } = req.query;
+  if (!repo_name || !github_token) {
+    return res.status(400).json({ error: "Missing repo_name or github_token" });
+  }
+
+  try {
+    const headers = {
+      Authorization: `token ${github_token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "telegram-bot-backend",
     };
 
-    if (existingIdx !== -1) {
-      projects[existingIdx] = {
-        ...newProj,
-        created_at: projects[existingIdx].created_at || newProj.created_at,
-      };
-    } else {
-      projects.push(newProj);
+    const resp = await fetch(`https://api.github.com/repos/${repo_name}/actions/runs?per_page=10`, { headers });
+    if (resp.status !== 200) {
+      const text = await resp.text();
+      return res.status(resp.status).json({ error: `Failed to fetch runs: ${text}` });
     }
-    saveProjects(projects);
 
-    res.json({
-      success: true,
-      message: `Success! Code injected and 24x7 daemon dispatch triggered for @${botUsername}!`,
-      username: botUsername,
-      bot_type: actualScript,
-      repo_name,
-    });
-  } catch (exc: any) {
-    console.error(`Launch failed:`, exc);
-    res.status(500).json({ success: false, message: exc.message });
-  }
-});
+    const data: any = await resp.json();
+    const runs = data.workflow_runs || [];
 
-app.post("/api/restart", async (req, res) => {
-  const { repo_name, github_token } = req.body;
-  if (!repo_name) {
-    return res.status(400).json({ success: false, detail: "Missing repo_name" });
-  }
-
-  const existingIdx = projects.findIndex((p) => p.repo_name === repo_name);
-  if (existingIdx === -1) {
-    return res.status(404).json({ success: false, detail: "Bot not found" });
-  }
-
-  // Set status to offline first, wait brief moment, then online to simulate restart
-  projects[existingIdx].status = "offline";
-  saveProjects(projects);
-
-  try {
-    // If it's a demo or normal token, simulate restart
-    await new Promise(r => setTimeout(r, 1200));
+    const botRuns = runs.filter((r: any) => r.name === "24x7 Bot Runner" || r.path.includes("bot.yml"));
     
-    projects[existingIdx].status = "online";
-    projects[existingIdx].started_at = new Date().toISOString();
-    projects[existingIdx].last_request_time = new Date().toISOString();
-    saveProjects(projects);
+    if (botRuns.length === 0) {
+      return res.json({ status: "not_setup", message: "No bot workflow run found. Setup is required." });
+    }
 
-    res.json({
-      success: true,
-      message: `Daemon node for ${repo_name} successfully restarted.`,
-    });
-  } catch (e: any) {
-    res.status(500).json({ success: false, message: e.message });
-  }
-});
+    const latestRun = botRuns[0];
+    
+    let status = "Stopped";
+    if (latestRun.status === "queued" || latestRun.status === "requested" || latestRun.status === "waiting") {
+      status = "Queued";
+    } else if (latestRun.status === "in_progress") {
+      status = "Running";
+    } else if (latestRun.status === "completed") {
+      if (latestRun.conclusion === "success") {
+        status = "Stopped";
+      } else if (latestRun.conclusion === "cancelled") {
+        status = "Stopped";
+      } else {
+        status = "Failed";
+      }
+    }
 
-app.post("/api/stop", async (req, res) => {
-  const { repo_name, github_token } = req.body;
-  if (!repo_name || !github_token) {
-    return res.status(400).json({ success: false, detail: "Missing repo_name or github_token" });
-  }
-
-  if (github_token.startsWith("demo_")) {
+    // Sync state locally
     const existingIdx = projects.findIndex((p) => p.repo_name === repo_name);
     if (existingIdx !== -1) {
-      projects[existingIdx].status = "offline";
+      projects[existingIdx].status = status === "Running" ? "online" : "offline";
+      projects[existingIdx].started_at = latestRun.created_at;
       saveProjects(projects);
     }
-    return res.json({
-      success: true,
-      message: `Stopped bot workflow runs successfully. Cancelled 1 running instance.`,
-      cancelled_instances: 1,
+
+    res.json({
+      status,
+      conclusion: latestRun.conclusion,
+      run_id: latestRun.id,
+      html_url: latestRun.html_url,
+      created_at: latestRun.created_at,
+      updated_at: latestRun.updated_at,
+      trigger: latestRun.event,
     });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/workflow/start", async (req, res) => {
+  const { repo_name, github_token, branch } = req.body;
+  if (!repo_name || !github_token) {
+    return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const headers = {
-    Authorization: `token ${github_token}`,
-    Accept: "application/vnd.github.v3+json",
-    "User-Agent": "telegram-bot-backend",
-  };
+  const defaultBranch = branch || "main";
 
   try {
-    // List in-progress runs
-    const runsResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/runs?status=in_progress`, {
+    const headers = {
+      Authorization: `token ${github_token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "telegram-bot-backend",
+      "Content-Type": "application/json",
+    };
+
+    const url = `https://api.github.com/repos/${repo_name}/actions/workflows/bot.yml/dispatches`;
+    const resp = await fetch(url, {
+      method: "POST",
       headers,
+      body: JSON.stringify({
+        ref: defaultBranch,
+      }),
     });
 
+    if (resp.status !== 204) {
+      const text = await resp.text();
+      return res.status(resp.status).json({ error: `Failed to dispatch: ${text}` });
+    }
+
+    const existingIdx = projects.findIndex((p) => p.repo_name === repo_name);
+    if (existingIdx !== -1) {
+      projects[existingIdx].status = "online";
+      projects[existingIdx].started_at = new Date().toISOString();
+      saveProjects(projects);
+    }
+
+    res.json({ success: true, message: "Workflow dispatch triggered successfully." });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/workflow/stop", async (req, res) => {
+  const { repo_name, github_token } = req.body;
+  if (!repo_name || !github_token) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  try {
+    const headers = {
+      Authorization: `token ${github_token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "telegram-bot-backend",
+    };
+
+    const runsResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/runs?status=in_progress`, { headers });
     if (runsResp.status !== 200) {
       const text = await runsResp.text();
-      return res.status(runsResp.status).json({ error: `GitHub API error: ${text}` });
+      return res.status(runsResp.status).json({ error: `GitHub error: ${text}` });
     }
 
     const data: any = await runsResp.json();
@@ -842,7 +879,7 @@ app.post("/api/stop", async (req, res) => {
 
     let cancelledCount = 0;
     for (const run of runs) {
-      if (run.name === "24x7 Multi-Bot Host Engine" || run.path.includes("run_bot.yml")) {
+      if (run.name === "24x7 Bot Runner" || run.path.includes("bot.yml")) {
         const cancelResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/runs/${run.id}/cancel`, {
           method: "POST",
           headers,
@@ -859,13 +896,135 @@ app.post("/api/stop", async (req, res) => {
       saveProjects(projects);
     }
 
-    res.json({
-      success: true,
-      message: `Stopped bot workflow runs successfully. Cancelled ${cancelledCount} running instances.`,
-      cancelled_instances: cancelledCount,
+    res.json({ success: true, cancelled_count: cancelledCount, message: `Cancelled ${cancelledCount} running bot instances.` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/workflow/restart", async (req, res) => {
+  const { repo_name, github_token, branch } = req.body;
+  if (!repo_name || !github_token) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  try {
+    const headers = {
+      Authorization: `token ${github_token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "telegram-bot-backend",
+    };
+
+    const runsResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/runs?status=in_progress`, { headers });
+    if (runsResp.status === 200) {
+      const data: any = await runsResp.json();
+      const runs = data.workflow_runs || [];
+      for (const run of runs) {
+        if (run.name === "24x7 Bot Runner" || run.path.includes("bot.yml")) {
+          await fetch(`https://api.github.com/repos/${repo_name}/actions/runs/${run.id}/cancel`, {
+            method: "POST",
+            headers,
+          });
+        }
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    const url = `https://api.github.com/repos/${repo_name}/actions/workflows/bot.yml/dispatches`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ref: branch || "main",
+      }),
     });
-  } catch (e: any) {
-    res.status(500).json({ success: false, message: e.message });
+
+    if (resp.status !== 204) {
+      const text = await resp.text();
+      return res.status(resp.status).json({ error: `Failed to trigger restart: ${text}` });
+    }
+
+    const existingIdx = projects.findIndex((p) => p.repo_name === repo_name);
+    if (existingIdx !== -1) {
+      projects[existingIdx].status = "online";
+      projects[existingIdx].started_at = new Date().toISOString();
+      saveProjects(projects);
+    }
+
+    res.json({ success: true, message: "Bot node restarted successfully." });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/workflow/logs", async (req, res) => {
+  const { repo_name, run_id, github_token } = req.query;
+  if (!repo_name || !github_token) {
+    return res.status(400).json({ error: "Missing required parameters" });
+  }
+
+  try {
+    const headers = {
+      Authorization: `token ${github_token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "telegram-bot-backend",
+    };
+
+    let targetRunId = run_id;
+
+    if (!targetRunId) {
+      const runsResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/runs?per_page=10`, { headers });
+      if (runsResp.status !== 200) {
+        return res.status(runsResp.status).json({ error: "Failed to fetch runs" });
+      }
+      const data: any = await runsResp.json();
+      const runs = data.workflow_runs || [];
+      const botRuns = runs.filter((r: any) => r.name === "24x7 Bot Runner" || r.path.includes("bot.yml"));
+      if (botRuns.length === 0) {
+        return res.json({ logs: "No bot workflow runs found." });
+      }
+      targetRunId = botRuns[0].id;
+    }
+
+    const jobsResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/runs/${targetRunId}/jobs`, { headers });
+    if (jobsResp.status !== 200) {
+      return res.status(jobsResp.status).json({ error: "Failed to fetch jobs for run" });
+    }
+    const jobsData: any = await jobsResp.json();
+    const jobs = jobsData.jobs || [];
+    if (jobs.length === 0) {
+      return res.json({ logs: "No jobs found for this run. Preparing logs..." });
+    }
+
+    const firstJob = jobs[0];
+    const jobId = firstJob.id;
+
+    const logsResp = await fetch(`https://api.github.com/repos/${repo_name}/actions/jobs/${jobId}/logs`, {
+      headers,
+      redirect: 'follow',
+    });
+
+    if (logsResp.status !== 200) {
+      return res.json({
+        logs: `[System Log] Job status is: ${firstJob.status}. Logs will appear once it starts executing.`,
+        steps: firstJob.steps || [],
+      });
+    }
+
+    const logsText = await logsResp.text();
+    const lines = logsText.split("\n");
+    const croppedLogs = lines.slice(-300).join("\n");
+
+    res.json({
+      logs: croppedLogs,
+      steps: firstJob.steps || [],
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

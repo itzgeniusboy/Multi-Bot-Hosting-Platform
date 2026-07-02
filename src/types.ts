@@ -16,7 +16,7 @@ export interface Project {
   bot_token: string;
   script_name: string;
   username: string;
-  status: 'online' | 'offline';
+  status: 'online' | 'offline' | 'queued' | 'failed';
   created_at: string;
   request_count: number;
   last_request_time?: string;

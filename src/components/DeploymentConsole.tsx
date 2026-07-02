@@ -4,8 +4,9 @@ import { Loader2, CheckCircle, XCircle, Terminal, AlertCircle, RefreshCw, ArrowL
 interface DeploymentConsoleProps {
   repoName: string;
   botToken: string;
-  scriptName: string;
+  scriptName: string; // Used for START_COMMAND
   githubToken: string;
+  envVars: { key: string; value: string }[];
   onSuccess: (data: any) => void;
   onFailure: (error: string) => void;
   onBack: () => void;
@@ -30,15 +31,16 @@ export default function DeploymentConsole({
   botToken,
   scriptName,
   githubToken,
+  envVars,
   onSuccess,
   onFailure,
   onBack
 }: DeploymentConsoleProps) {
   const [stages, setStages] = useState<Stage[]>([
-    { id: 'validate', name: 'Validating Token', status: 'pending' },
-    { id: 'webhook', name: 'Setting Webhook', status: 'pending' },
-    { id: 'allocate', name: 'Allocating Serverless Node', status: 'pending' },
-    { id: 'live', name: 'Bot Live', status: 'pending' }
+    { id: 'workflow', name: 'Creating GitHub Workflow', status: 'pending' },
+    { id: 'secrets', name: 'Encrypting & Committing Secrets', status: 'pending' },
+    { id: 'register', name: 'Registering Bot Node', status: 'pending' },
+    { id: 'launch', name: 'Dispatching Live Run Event', status: 'pending' }
   ]);
 
   const [logs, setLogs] = useState<LogLine[]>([]);
@@ -79,277 +81,264 @@ export default function DeploymentConsole({
     );
   };
 
-  // Perform the actual deploy API call and write cinematic logs
+  // Perform deployment setup and trigger actions
   useEffect(() => {
     if (hasTriggeredDeploy.current) return;
     hasTriggeredDeploy.current = true;
 
     const performDeployment = async () => {
-      // 1. Start Deploy
-      addLog('Deployment container initialized successfully.', 'info');
-      addLog(`Selected target repository: ${repoName}`, 'info');
-      addLog(`Selected template: ${scriptName}`, 'info');
-      
-      updateStage('validate', 'running');
-      addLog('Verifying Telegram Bot Token with secure API gateway...', 'info');
+      addLog('Initiating deployment environment orchestration...', 'info');
+      addLog(`Selected repository namespace: ${repoName}`, 'info');
+      addLog(`Configured daemon launch sequence: ${scriptName || 'python main.py'}`, 'info');
 
-      // Create a delay before launching the API to make the log streaming premium
-      await new Promise((r) => setTimeout(r, 900));
+      // 1. Setup GitHub Workflows
+      updateStage('workflow', 'running');
+      addLog('Generating modern YAML configuration for 24x7 bot runtime...', 'info');
+      await new Promise((r) => setTimeout(r, 600));
 
       try {
-        const response = await fetch('/api/launch', {
+        const wfResp = await fetch('/api/workflow/setup', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            repo_name: repoName,
-            bot_token: botToken,
-            script_name: scriptName,
-            github_token: githubToken,
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repo_name: repoName, github_token: githubToken })
         });
 
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-          // Stream success sequence
-          updateStage('validate', 'success');
-          addLog(`Token verified for Telegram bot: @${data.username}`, 'success');
-          
-          updateStage('webhook', 'running');
-          addLog('Clearing active webhooks on Telegram server to allow Actions Polling loops...', 'info');
-          await new Promise((r) => setTimeout(r, 800));
-          addLog('Webhook successfully cleared. Dispatching files to repository...', 'success');
-          
-          addLog('Injecting Workflow file: .github/workflows/run_bot.yml...', 'info');
-          await new Promise((r) => setTimeout(r, 600));
-          addLog(`Injecting Script template: templates/${data.bot_type}.py...`, 'info');
-          await new Promise((r) => setTimeout(r, 600));
-          
-          updateStage('webhook', 'success');
-          addLog('GitHub files successfully committed and pushed to main branch.', 'success');
-          
-          updateStage('allocate', 'running');
-          addLog('Dispatching dispatch event to allocate serverless runner node...', 'info');
-          await new Promise((r) => setTimeout(r, 950));
-          addLog('Gateway dispatched accepted by GitHub Actions. Dispatch status: 204.', 'success');
-          
-          updateStage('allocate', 'success');
-          addLog('Provisioning offline loop recycling environment...', 'info');
-          
-          updateStage('live', 'running');
-          await new Promise((r) => setTimeout(r, 800));
-          addLog(`Serverless pooling node online and listening for Telegram updates!`, 'success');
-          updateStage('live', 'success');
-          
-          addLog('Deployment fully compiled and integrated successfully!', 'success');
-          await new Promise((r) => setTimeout(r, 500));
-          
-          onSuccess(data);
-        } else {
-          // Stream error sequence
-          updateStage('validate', 'error');
-          addLog(`Verification failed: ${data.message || data.detail || 'GitHub Actions rejected files.'}`, 'error');
-          setDeployError(data.message || data.detail || 'Workflow file commit failed.');
-          onFailure(data.message || data.detail || 'Workflow dispatch failed.');
+        if (!wfResp.ok) {
+          const wfErrData = await wfResp.json();
+          throw new Error(wfErrData.error || 'Failed to setup GitHub workflow file.');
         }
+
+        const wfData = await wfResp.json();
+        updateStage('workflow', 'success');
+        addLog('Successfully committed .github/workflows/bot.yml to the main branch.', 'success');
+        addLog(`Commit SHA: ${wfData.commit_sha || 'N/A'}`, 'info');
+
+        // 2. Encrypt & commit secrets (BOT_TOKEN and other keys)
+        updateStage('secrets', 'running');
+        addLog('Initializing Sodium-based public-key encryption layer...', 'info');
+        await new Promise((r) => setTimeout(r, 500));
+
+        // Prepare secrets list
+        const secretsToSet: { key: string; value: string }[] = [];
+        if (botToken) {
+          secretsToSet.push({ key: 'BOT_TOKEN', value: botToken });
+        }
+        if (scriptName) {
+          secretsToSet.push({ key: 'RUN_COMMAND', value: scriptName });
+        }
+        envVars.forEach(v => {
+          secretsToSet.push({ key: v.key, value: v.value });
+        });
+
+        if (secretsToSet.length > 0) {
+          addLog(`Queued ${secretsToSet.length} secrets for encryption and remote repository binding...`, 'info');
+          
+          for (const sec of secretsToSet) {
+            addLog(`Encrypting secret: ${sec.key}...`, 'info');
+            const secResp = await fetch('/api/secrets/set', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                repo_name: repoName,
+                github_token: githubToken,
+                secret_name: sec.key,
+                secret_value: sec.value
+              })
+            });
+
+            if (!secResp.ok) {
+              const secErrData = await secResp.json();
+              throw new Error(secErrData.error || `Failed to encrypt and save secret ${sec.key}`);
+            }
+            addLog(`Secret ${sec.key} securely bound to repository secrets context.`, 'success');
+            await new Promise((r) => setTimeout(r, 300));
+          }
+        } else {
+          addLog('No repository secrets configured. Skipping encryption stage.', 'info');
+        }
+
+        updateStage('secrets', 'success');
+        addLog('All environment variables and credentials secured on GitHub Secrets API.', 'success');
+
+        // 3. Register project to multi-bot platform database
+        updateStage('register', 'running');
+        addLog('Registering repository reference in system cluster state...', 'info');
+        await new Promise((r) => setTimeout(r, 600));
+
+        const regResp = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            repo_name: repoName,
+            github_token: githubToken,
+            script_name: scriptName || 'python main.py',
+            username: repoName.split('/')[1] || 'telegram_bot'
+          })
+        });
+
+        if (!regResp.ok) {
+          const regErrData = await regResp.json();
+          throw new Error(regErrData.error || 'Failed to register bot project in system state.');
+        }
+
+        const projectData = await regResp.json();
+        updateStage('register', 'success');
+        addLog(`Registered bot node: ${repoName} in local state.`, 'success');
+
+        // 4. Dispatch and trigger workflow
+        updateStage('launch', 'running');
+        addLog('Dispatching start trigger to GitHub Actions API gateway...', 'info');
+        await new Promise((r) => setTimeout(r, 600));
+
+        const startResp = await fetch('/api/workflow/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            repo_name: repoName,
+            github_token: githubToken
+          })
+        });
+
+        if (!startResp.ok) {
+          const startErr = await startResp.json();
+          throw new Error(startErr.error || 'Failed to trigger starting workflow run on GitHub.');
+        }
+
+        updateStage('launch', 'success');
+        addLog('Workflow dispatch event accepted by GitHub (Status: 204). Bot node is now Queued!', 'success');
+        addLog('Deployment orchestration completed successfully!', 'success');
+
+        await new Promise((r) => setTimeout(r, 800));
+        onSuccess(projectData);
+
       } catch (err: any) {
-        updateStage('validate', 'error');
-        addLog(`Network pipeline connection interrupted: ${err.message}`, 'error');
-        setDeployError(err.message || 'Failed to connect to deployment gateway.');
-        onFailure(err.message || 'Failed to connect to deployment gateway.');
+        const errorMsg = err.message || 'An unexpected error occurred during build/deployment.';
+        setDeployError(errorMsg);
+        addLog(`DEPLOYMENT CRITICAL FAILURE: ${errorMsg}`, 'error');
+        
+        // Update any running stages to 'error'
+        stages.forEach(s => {
+          if (s.status === 'running' || s.status === 'pending') {
+            updateStage(s.id, 'error');
+          }
+        });
+        
+        onFailure(errorMsg);
       }
     };
 
     performDeployment();
-  }, [repoName, botToken, scriptName, githubToken]);
+  }, [repoName, botToken, scriptName, githubToken, envVars]);
 
   return (
     <div className="space-y-6">
-      {/* Stages Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        {stages.map((stage) => {
+      {/* Stages layout */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 rounded-2xl border border-[#00D4FF]/5 bg-[#050B18]/40">
+        {stages.map((st) => {
+          const isPending = st.status === 'pending';
+          const isRunning = st.status === 'running';
+          const isSuccess = st.status === 'success';
+          const isError = st.status === 'error';
+
           return (
             <div
-              key={stage.id}
-              className={`p-3.5 rounded-xl border flex flex-col gap-2 relative overflow-hidden transition-all duration-300 ${
-                stage.status === 'running'
+              key={st.id}
+              className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2 ${
+                isRunning
                   ? 'bg-[#00D4FF]/5 border-[#00D4FF]/30 shadow-[0_0_15px_rgba(0,212,255,0.05)]'
-                  : stage.status === 'success'
-                  ? 'bg-emerald-500/5 border-emerald-500/10'
-                  : stage.status === 'error'
+                  : isSuccess
+                  ? 'bg-emerald-500/5 border-emerald-500/15'
+                  : isError
                   ? 'bg-rose-500/5 border-rose-500/15'
-                  : 'bg-[#050B18]/30 border-[#00D4FF]/5'
+                  : 'bg-[#050B18]/10 border-transparent'
               }`}
             >
-              {stage.status === 'running' && (
-                <div className="absolute top-0 left-0 h-[2px] bg-[#00D4FF] w-full animate-pulse"></div>
-              )}
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono tracking-wider uppercase text-[#4A6080]">
-                  STAGE STATUS
+                <span className="text-[9px] font-mono tracking-wider text-[#4A6080] uppercase">
+                  {st.id}
                 </span>
-                {stage.status === 'running' && (
-                  <Loader2 className="w-3.5 h-3.5 text-[#00D4FF] animate-spin" />
-                )}
-                {stage.status === 'success' && (
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                )}
-                {stage.status === 'error' && (
-                  <XCircle className="w-3.5 h-3.5 text-rose-400" />
-                )}
-                {stage.status === 'pending' && (
-                  <div className="w-3.5 h-3.5 rounded-full border border-[#4A6080]/30"></div>
-                )}
+                {isRunning && <Loader2 className="w-3.5 h-3.5 text-[#00D4FF] animate-spin" />}
+                {isSuccess && <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
+                {isError && <XCircle className="w-3.5 h-3.5 text-rose-400" />}
+                {isPending && <div className="w-2.5 h-2.5 rounded-full bg-[#4A6080]/20" />}
               </div>
-              <span className={`text-xs font-display font-extrabold ${
-                stage.status === 'running'
-                  ? 'text-white'
-                  : stage.status === 'success'
-                  ? 'text-[#F0F6FF]'
-                  : stage.status === 'error'
-                  ? 'text-rose-400'
-                  : 'text-[#4A6080]'
-              }`}>
-                {stage.name}
+              <span className="text-xs font-display font-bold text-[#F0F6FF] truncate">
+                {st.name}
               </span>
             </div>
           );
         })}
       </div>
 
-      {/* Retro-Styled Monospace Console */}
-      <div className="space-y-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2">
-          <span className="text-[10px] font-mono tracking-widest text-[#4A6080] uppercase flex items-center gap-1.5">
+      {/* Terminal View */}
+      <div className="rounded-2xl border border-[#00D4FF]/10 bg-[#02050B] overflow-hidden flex flex-col h-[340px] relative">
+        <div className="px-4 py-2.5 bg-[#050B18] border-b border-[#00D4FF]/5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <Terminal className="w-3.5 h-3.5 text-[#00D4FF]" />
-            Live Deployment Console
-          </span>
-          
-          {/* Console Controls Bar */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Filter pills */}
-            <div className="flex bg-[#050B18]/60 border border-[#00D4FF]/10 rounded-lg p-0.5">
-              {(['all', 'info', 'warning', 'error'] as const).map((lvl) => (
-                <button
-                  key={lvl}
-                  type="button"
-                  onClick={() => setLogFilter(lvl)}
-                  className={`px-2 py-0.5 text-[9px] font-mono uppercase font-bold rounded transition-all cursor-pointer ${
-                    logFilter === lvl
-                      ? lvl === 'error'
-                        ? 'bg-rose-500 text-white'
-                        : lvl === 'warning'
-                        ? 'bg-amber-500 text-[#050B18]'
-                        : 'bg-[#00D4FF] text-[#050B18]'
-                      : 'text-[#4A6080] hover:text-white'
-                  }`}
-                >
-                  {lvl}
-                </button>
-              ))}
-            </div>
+            <span className="text-[10px] font-mono text-[#4A6080] uppercase font-bold tracking-wider">
+              Deployment Stream logs
+            </span>
+          </div>
 
-            {/* Scroll Lock Toggle */}
+          <div className="flex items-center gap-3">
+            <select
+              value={logFilter}
+              onChange={(e: any) => setLogFilter(e.target.value)}
+              className="bg-[#050B18]/80 border border-[#00D4FF]/10 rounded-lg px-2.5 py-1 text-[9px] font-mono text-[#4A6080] outline-none cursor-pointer hover:text-white transition-colors"
+            >
+              <option value="all">ALL LOGS</option>
+              <option value="info">INFO</option>
+              <option value="warning">WARNINGS</option>
+              <option value="error">ERRORS</option>
+            </select>
+
             <button
-              type="button"
               onClick={() => setIsAutoScrollPaused(!isAutoScrollPaused)}
-              className={`px-2.5 py-1 rounded-lg border text-[9px] font-mono font-bold tracking-wider uppercase transition-all cursor-pointer ${
+              className={`text-[9px] font-mono tracking-wider uppercase border rounded-lg px-2 py-1 transition-all ${
                 isAutoScrollPaused
-                  ? 'border-amber-500/20 bg-amber-500/5 text-amber-400'
-                  : 'border-[#00D4FF]/10 bg-[#050B18]/60 text-[#4A6080] hover:text-white hover:border-[#00D4FF]/30'
+                  ? 'border-amber-500/30 text-amber-500 hover:bg-amber-500/5'
+                  : 'border-[#4A6080]/15 text-[#4A6080] hover:text-white'
               }`}
             >
-              {isAutoScrollPaused ? 'Scroll Paused' : 'Auto-Scroll'}
-            </button>
-
-            {/* Export log */}
-            <button
-              type="button"
-              onClick={() => {
-                const logText = logs.map(l => `[${l.timestamp}] [${l.type.toUpperCase()}] ${l.text}`).join('\n');
-                const blob = new Blob([logText], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `deploy_logs_${repoName.replace('/', '_')}.txt`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-              }}
-              className="px-2.5 py-1 rounded-lg border border-[#00D4FF]/10 bg-[#050B18]/60 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/30 text-[9px] font-mono font-bold tracking-wider uppercase transition-all cursor-pointer"
-            >
-              Download
+              {isAutoScrollPaused ? 'PAUSED' : 'AUTO-SCROLL'}
             </button>
           </div>
         </div>
 
-        <div className="relative rounded-xl border border-[#00D4FF]/10 bg-[#02050B] overflow-hidden shadow-inner">
-          {/* Neon Retro Scanlines overlay */}
-          <div className="terminal-scanlines" />
-
-          <div className="h-[280px] overflow-y-auto p-5 font-mono text-[11px] leading-relaxed space-y-2 scrollbar-thin select-text">
-            {filteredLogs.map((log, index) => (
-              <div
-                key={index}
-                className={`flex items-start gap-2.5 transition-all duration-300 ${
+        {/* Scrollable logs body */}
+        <div className="p-4 flex-1 overflow-y-auto font-mono text-[11px] space-y-2 select-text text-left">
+          {filteredLogs.map((log, idx) => (
+            <div key={idx} className="flex items-start gap-3 leading-relaxed">
+              <span className="text-[#4A6080] select-none shrink-0">[{log.timestamp}]</span>
+              <span
+                className={
                   log.type === 'success'
                     ? 'text-emerald-400'
                     : log.type === 'error'
-                    ? 'text-rose-400'
+                    ? 'text-rose-400 font-bold'
                     : log.type === 'warning'
                     ? 'text-amber-400'
-                    : 'text-[#8EA8D0]'
-                }`}
+                    : 'text-[#90A4AE]'
+                }
               >
-                <span className="text-[#4A6080] shrink-0 font-medium">[{log.timestamp}]</span>
-                <span className="font-semibold text-[10px] tracking-wider shrink-0 uppercase">
-                  {log.type === 'info' ? 'info:' : log.type === 'success' ? 'ok:' : log.type === 'warning' ? 'warn:' : 'err:'}
-                </span>
-                <span className="flex-1 whitespace-pre-wrap">{log.text}</span>
-              </div>
-            ))}
-            <div ref={consoleEndRef} />
-          </div>
+                {log.text}
+              </span>
+            </div>
+          ))}
+          <div ref={consoleEndRef} />
         </div>
       </div>
 
-      {/* Troubleshooting Failure Controls */}
       {deployError && (
-        <div className="p-5 rounded-2xl border border-rose-500/20 bg-rose-500/5 space-y-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <h4 className="text-xs font-display font-bold text-white uppercase tracking-wider">
-                Deployment Pipeline Failure
-              </h4>
-              <p className="text-[11px] text-[#4A6080] leading-relaxed">
-                The gateway returned an validation exception: "{deployError}". This generally occurs if your Telegram Bot Token is invalid, or your GitHub token lacks the "workflow" scope required to commit and trigger actions.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              onClick={() => {
-                hasTriggeredDeploy.current = false;
-                setDeployError(null);
-                setLogs([]);
-                setStages(stages.map(s => ({ ...s, status: 'pending' })));
-              }}
-              className="px-4 py-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:opacity-90 active:scale-95 text-white rounded-lg text-[10px] font-mono font-bold tracking-wider uppercase transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Restart Pipeline
-            </button>
-            <button
-              onClick={onBack}
-              className="px-4 py-2 border border-[#00D4FF]/15 hover:border-[#00D4FF]/30 text-[#4A6080] hover:text-white rounded-lg text-[10px] font-mono font-bold tracking-wider uppercase transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Adjust Configurations
-            </button>
+        <div className="p-4 bg-rose-500/5 border border-rose-500/10 rounded-xl flex items-start gap-3">
+          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <span className="text-xs font-mono font-bold text-rose-400 block uppercase">
+              Build & Integration Error
+            </span>
+            <p className="text-[11px] text-[#4A6080] leading-relaxed">
+              {deployError} Please verify that your GitHub Token is correct and has the necessary permissions (<code className="text-rose-400">repo</code> scopes) to configure workflows and secure secrets on your repository.
+            </p>
           </div>
         </div>
       )}

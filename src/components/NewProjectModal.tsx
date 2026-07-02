@@ -34,10 +34,11 @@ export default function NewProjectModal({
   const [step, setStep] = useState<WizardStep>('select_repo');
   const [selectedRepo, setSelectedRepo] = useState('');
   const [botToken, setBotToken] = useState('');
-  const [selectedScript, setSelectedScript] = useState('movie_bot.py');
+  const [selectedScript, setSelectedScript] = useState('python main.py');
   const [deployResult, setDeployResult] = useState<any>(null);
+  const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
 
-  // Sync initialData for duplication config cloned runs
+  // Sync initialData for duplication/clone configs
   React.useEffect(() => {
     if (isOpen) {
       if (initialData) {
@@ -49,7 +50,8 @@ export default function NewProjectModal({
         setStep('select_repo');
         setSelectedRepo('');
         setBotToken('');
-        setSelectedScript('movie_bot.py');
+        setSelectedScript('python main.py');
+        setEnvVars([]);
       }
     }
   }, [isOpen, initialData]);
@@ -72,7 +74,8 @@ export default function NewProjectModal({
     setStep('select_repo');
     setSelectedRepo('');
     setBotToken('');
-    setSelectedScript('movie_bot.py');
+    setSelectedScript('python main.py');
+    setEnvVars([]);
     setDeployResult(null);
     onClose();
   };
@@ -123,7 +126,7 @@ export default function NewProjectModal({
                 // CREATING NEW PROJECT
               </span>
               <h2 className="text-sm font-display font-extrabold text-[#F0F6FF] tracking-wider">
-                Vercel-Style Integration
+                GitHub Action Bot Setup
               </h2>
             </div>
           </div>
@@ -199,6 +202,8 @@ export default function NewProjectModal({
                     setStep('deploying');
                   }}
                   onBack={() => setStep('select_repo')}
+                  envVars={envVars}
+                  setEnvVars={setEnvVars}
                 />
               )}
 
@@ -208,6 +213,7 @@ export default function NewProjectModal({
                   botToken={botToken}
                   scriptName={selectedScript}
                   githubToken={githubToken}
+                  envVars={envVars}
                   onSuccess={handleDeploymentSuccess}
                   onFailure={(err) => console.error('Deployment error callback:', err)}
                   onBack={handleBackToConfigure}
