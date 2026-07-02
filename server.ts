@@ -627,7 +627,7 @@ app.get("/api/repo/detect-entrypoint", async (req, res) => {
 
     const resp = await fetch(`https://api.github.com/repos/${repo_name}/contents`, { headers });
     if (resp.status !== 200) {
-      return res.json({ default_command: "python main.py" });
+      return res.json({ default_command: "python bot.py" });
     }
 
     const items: any = await resp.json();
@@ -635,11 +635,14 @@ app.get("/api/repo/detect-entrypoint", async (req, res) => {
       const fileNames = items.map((item: any) => item.name);
       const hasBotPy = fileNames.includes("bot.py");
       const hasMainPy = fileNames.includes("main.py");
-      if (hasBotPy && !hasMainPy) {
+      if (hasBotPy) {
         return res.json({ default_command: "python bot.py" });
       }
+      if (hasMainPy) {
+        return res.json({ default_command: "python main.py" });
+      }
     }
-    res.json({ default_command: "python main.py" });
+    res.json({ default_command: "python bot.py" });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -723,11 +726,11 @@ jobs:
         run: |
           RUN_COMMAND="\${{ secrets.RUN_COMMAND }}"
           if [ -z "$RUN_COMMAND" ]; then
-            if [ -f main.py ]; then RUN_COMMAND="python main.py"
-            elif [ -f bot.py ]; then RUN_COMMAND="python bot.py"
+            if [ -f bot.py ]; then RUN_COMMAND="python bot.py"
+            elif [ -f main.py ]; then RUN_COMMAND="python main.py"
             elif [ -f index.js ]; then RUN_COMMAND="node index.js"
             elif [ -f package.json ]; then RUN_COMMAND="npm start"
-            else RUN_COMMAND="python main.py"
+            else RUN_COMMAND="python bot.py"
             fi
           fi
           echo "Executing start command: $RUN_COMMAND"

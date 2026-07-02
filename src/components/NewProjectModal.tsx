@@ -65,7 +65,7 @@ export default function NewProjectModal({
         setStep('select_repo');
         setSelectedRepo('');
         setBotToken('');
-        setSelectedScript('python main.py');
+        setSelectedScript('python bot.py');
         setEnvVars([]);
       }
     }
@@ -106,7 +106,7 @@ export default function NewProjectModal({
     setStep('select_repo');
     setSelectedRepo('');
     setBotToken('');
-    setSelectedScript('python main.py');
+    setSelectedScript('python bot.py');
     setEnvVars([]);
     setDeployResult(null);
     onClose();

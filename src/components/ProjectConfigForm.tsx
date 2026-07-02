@@ -37,7 +37,7 @@ export default function ProjectConfigForm({
       setProjectName(repoName);
       // Prefill default start command
       if (!selectedScript) {
-        setSelectedScript('python main.py');
+        setSelectedScript('python bot.py');
       }
     }
   }, [selectedRepo]);
@@ -101,7 +101,7 @@ export default function ProjectConfigForm({
             value={selectedScript}
             onChange={(e) => setSelectedScript(e.target.value)}
             className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] rounded-xl px-4 py-3 text-xs text-[#F0F6FF] font-mono outline-none transition-all"
-            placeholder="python main.py"
+            placeholder="python bot.py"
           />
           <p className="text-[10px] text-[#4A6080] leading-relaxed">
             The script or command required to run your bot. Examples: <code className="text-[#00D4FF] font-mono">python bot.py</code>, <code className="text-[#00D4FF] font-mono">node index.js</code>, or <code className="text-[#00D4FF] font-mono">npm start</code>. If left blank or unspecified, the workflow will attempt to auto-detect Python or Node main script entry points.

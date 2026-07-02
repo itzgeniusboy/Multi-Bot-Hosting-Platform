@@ -1779,6 +1779,513 @@ async def stop_bot(payload: StopRequest, request: Request):
             "cancelled_count": cancelled_count
         }
 
+PROJECTS_FILE = os.path.join(os.getcwd(), "projects_store.json")
+
+def load_projects_py():
+    try:
+        if os.path.exists(PROJECTS_FILE):
+            with open(PROJECTS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load projects: {e}")
+    return []
+
+def save_projects_py(p_list):
+    try:
+        with open(PROJECTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(p_list, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Failed to save projects: {e}")
+
+class ProjectSetupRequest(BaseModel):
+    repo_name: str
+    github_token: str
+
+class SecretsSetRequest(BaseModel):
+    repo_name: str
+    secret_name: str
+    secret_value: str
+    github_token: str
+
+class RegisterProjectRequest(BaseModel):
+    repo_name: str
+    github_token: Optional[str] = None
+    script_name: str
+    username: str
+
+class ProjectDeleteRequest(BaseModel):
+    repo_name: str
+
+class WorkflowStartRequest(BaseModel):
+    repo_name: str
+    github_token: str
+    branch: Optional[str] = None
+
+class WorkflowStopRequest(BaseModel):
+    repo_name: str
+    github_token: str
+
+class WorkflowRestartRequest(BaseModel):
+    repo_name: str
+    github_token: str
+    branch: Optional[str] = None
+
+@app.get("/api/projects")
+async def get_projects_py():
+    return load_projects_py()
+
+@app.post("/api/projects")
+async def register_project_py(payload: RegisterProjectRequest):
+    repo_name = payload.repo_name
+    p_list = load_projects_py()
+    existing_idx = next((i for i, p in enumerate(p_list) if p.get("repo_name") == repo_name), -1)
+    
+    from datetime import datetime
+    created_at = datetime.utcnow().isoformat() + "Z"
+    
+    new_proj = {
+        "id": repo_name.replace("/", "-"),
+        "repo_name": repo_name,
+        "bot_token": "",
+        "script_name": payload.script_name or "mbhp_bot.yml",
+        "username": payload.username,
+        "status": "offline",
+        "created_at": created_at,
+        "request_count": 0,
+        "health": "healthy"
+    }
+
+    if existing_idx == -1:
+        p_list.append(new_proj)
+    else:
+        p_list[existing_idx]["script_name"] = payload.script_name or "mbhp_bot.yml"
+        p_list[existing_idx]["username"] = payload.username
+        new_proj = p_list[existing_idx]
+
+    save_projects_py(p_list)
+    return new_proj
+
+@app.post("/api/projects/delete")
+async def delete_project_py(payload: ProjectDeleteRequest):
+    p_list = load_projects_py()
+    p_list = [p for p in p_list if p.get("repo_name") != payload.repo_name]
+    save_projects_py(p_list)
+    return {"success": True, "message": "Project deleted from dashboard"}
+
+@app.get("/api/repo/detect-entrypoint")
+async def detect_entrypoint_py(repo_name: str, github_token: str):
+    headers = {
+        "Authorization": f"token {github_token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "telegram-bot-backend",
+    }
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(f"https://api.github.com/repos/{repo_name}/contents", headers=headers)
+            if resp.status_code != 200:
+                return {"default_command": "python bot.py"}
+            items = resp.json()
+            if isinstance(items, list):
+                file_names = [item.get("name") for item in items]
+                has_bot_py = "bot.py" in file_names
+                has_main_py = "main.py" in file_names
+                if has_bot_py:
+                    return {"default_command": "python bot.py"}
+                elif has_main_py:
+                    return {"default_command": "python main.py"}
+        except Exception as e:
+            logger.error(f"Error auto-detecting entry point: {e}")
+    return {"default_command": "python bot.py"}
+
+@app.post("/api/workflow/setup")
+async def workflow_setup_py(payload: ProjectSetupRequest):
+    repo_name = payload.repo_name
+    github_token = payload.github_token
+
+    # 1. Pre-flight check
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "telegram-bot-backend",
+    }
+    async with httpx.AsyncClient() as client:
+        try:
+            rate_resp = await client.get("https://api.github.com/user", headers=headers)
+            if rate_resp.status_code != 200:
+                return JSONResponse(
+                    status_code=rate_resp.status_code,
+                    content={"error": f"Invalid GitHub Token pre-flight check failed: {rate_resp.text}"}
+                )
+            
+            scopes_header = rate_resp.headers.get("X-OAuth-Scopes")
+            if scopes_header is not None:
+                scopes = [s.strip().lower() for s in scopes_header.split(",")]
+                has_repo = "repo" in scopes
+                has_workflow = "workflow" in scopes
+                if not has_repo or not has_workflow:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"error": f"CRITICAL: Your GitHub Token is missing the mandatory 'workflow' or 'repo' permissions. Found scopes: {scopes_header}"}
+                    )
+        except Exception as err:
+            return JSONResponse(
+                status_code=500,
+                content={"error": f"Failed to run token pre-flight validation: {str(err)}"}
+            )
+
+        workflow_yml = """name: 24x7 Bot Runner
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+  push:
+    branches: [ main, master, dev ]
+
+concurrency:
+  group: bot-runner-${{ github.repository }}
+  cancel-in-progress: true
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          elif [ -f package.json ]; then
+            sudo apt-get install -y nodejs npm
+            npm install
+          else
+            pip install pyTelegramBotAPI telebot aiogram httpx
+          fi
+
+      - name: Run Bot Node
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          RUN_COMMAND="${{ secrets.RUN_COMMAND }}"
+          if [ -z "$RUN_COMMAND" ]; then
+            if [ -f bot.py ]; then RUN_COMMAND="python bot.py"
+            elif [ -f main.py ]; then RUN_COMMAND="python main.py"
+            elif [ -f index.js ]; then RUN_COMMAND="node index.js"
+            elif [ -f package.json ]; then RUN_COMMAND="npm start"
+            else RUN_COMMAND="python bot.py"
+            fi
+          fi
+          echo "Executing start command: $RUN_COMMAND"
+          eval $RUN_COMMAND
+"""
+
+        try:
+            await commit_github_file(
+                client=client,
+                token=github_token,
+                repo_name=repo_name,
+                path=".github/workflows/mbhp_bot.yml",
+                content=workflow_yml,
+                message="[Platform] Setup 24x7 Continuous Bot Runner Workflow"
+            )
+
+            p_list = load_projects_py()
+            existing_idx = next((i for i, p in enumerate(p_list) if p.get("repo_name") == repo_name), -1)
+            
+            from datetime import datetime
+            created_at = datetime.utcnow().isoformat() + "Z"
+            
+            new_proj = {
+                "id": repo_name.replace("/", "-"),
+                "repo_name": repo_name,
+                "bot_token": "",
+                "script_name": "mbhp_bot.yml",
+                "username": repo_name.split("/")[1] if "/" in repo_name else repo_name,
+                "status": "offline",
+                "created_at": created_at,
+                "request_count": 0,
+                "health": "healthy"
+            }
+
+            if existing_idx == -1:
+                p_list.append(new_proj)
+            else:
+                p_list[existing_idx]["status"] = "offline"
+            
+            save_projects_py(p_list)
+
+            return {"success": True, "message": "Workflow .github/workflows/mbhp_bot.yml successfully committed!"}
+        except Exception as err:
+            err_msg = str(err)
+            if "workflow scope" in err_msg or "workflow" in err_msg:
+                return JSONResponse(
+                    status_code=422,
+                    content={"error": "Your Classic Personal Access Token is missing the 'workflow' scope. Please edit your token on GitHub and enable the 'workflow' checkbox under Developer Settings."}
+                )
+            if "Resource not accessible" in err_msg:
+                return JSONResponse(
+                    status_code=403,
+                    content={"error": "Your Fine-grained Personal Access Token is missing the 'Workflows' permission. Please edit your token on GitHub, and under Repository Permissions, grant Read & Write access to 'Workflows'."}
+                )
+            if "403" in err_msg or "GITHUB_WRITE_FORBIDDEN" in err_msg:
+                return JSONResponse(
+                    status_code=403,
+                    content={"error": "Access Denied (403): Your token does not have write access to this repository or lacks the 'workflow' permission. For Classic Tokens, check 'workflow' and 'repo'. For Fine-grained, check 'Workflows' (Read & Write)."}
+                )
+            if "404" in err_msg or "GITHUB_WRITE_NOT_FOUND" in err_msg:
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": "Repository Not Found (404): Please verify that your repository name is spelled correctly and that your token has access to this repository."}
+                )
+            return JSONResponse(status_code=500, content={"error": err_msg})
+
+@app.post("/api/secrets/set")
+async def secrets_set_py(payload: SecretsSetRequest):
+    async with httpx.AsyncClient() as client:
+        try:
+            await set_github_secret(
+                client=client,
+                token=payload.github_token,
+                repo_name=payload.repo_name,
+                secret_name=payload.secret_name,
+                secret_value=payload.secret_value
+            )
+            return {"success": True, "message": f"Secret {payload.secret_name} successfully set on GitHub!"}
+        except Exception as err:
+            logger.error(f"Failed to set GitHub secret: {err}")
+            return JSONResponse(status_code=500, content={"error": str(err)})
+
+@app.get("/api/workflow/status")
+async def workflow_status_py(repo_name: str, github_token: str):
+    headers = {
+        "Authorization": f"token {github_token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "telegram-bot-backend",
+    }
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(f"https://api.github.com/repos/{repo_name}/actions/runs?per_page=10", headers=headers)
+            if resp.status_code != 200:
+                return JSONResponse(status_code=resp.status_code, content={"error": f"Failed to fetch runs: {resp.text}"})
+            
+            data = resp.json()
+            runs = data.get("workflow_runs", [])
+            bot_runs = [r for r in runs if r.get("name") == "24x7 Bot Runner" or "mbhp_bot.yml" in r.get("path", "") or "bot.yml" in r.get("path", "")]
+            
+            if not bot_runs:
+                return {"status": "not_setup", "message": "No bot workflow run found. Setup is required."}
+            
+            latest_run = bot_runs[0]
+            status = "Stopped"
+            r_status = latest_run.get("status")
+            r_conclusion = latest_run.get("conclusion")
+            
+            if r_status in ["queued", "requested", "waiting"]:
+                status = "Queued"
+            elif r_status == "in_progress":
+                status = "Running"
+            elif r_status == "completed":
+                if r_conclusion == "success":
+                    status = "Stopped"
+                elif r_conclusion == "cancelled":
+                    status = "Stopped"
+                else:
+                    status = "Failed"
+            
+            # Sync local state
+            p_list = load_projects_py()
+            idx = next((i for i, p in enumerate(p_list) if p.get("repo_name") == repo_name), -1)
+            if idx != -1:
+                p_list[idx]["status"] = "online" if status == "Running" else "offline"
+                p_list[idx]["started_at"] = latest_run.get("created_at")
+                save_projects_py(p_list)
+                
+            return {
+                "status": status,
+                "conclusion": r_conclusion,
+                "run_id": latest_run.get("id"),
+                "html_url": latest_run.get("html_url"),
+                "created_at": latest_run.get("created_at"),
+                "updated_at": latest_run.get("updated_at"),
+                "trigger": latest_run.get("event")
+            }
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/workflow/start")
+async def workflow_start_py(payload: WorkflowStartRequest):
+    repo_name = payload.repo_name
+    github_token = payload.github_token
+    default_branch = payload.branch or "main"
+    
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "telegram-bot-backend",
+        "Content-Type": "application/json",
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            url = f"https://api.github.com/repos/{repo_name}/actions/workflows/mbhp_bot.yml/dispatches"
+            resp = await client.post(url, headers=headers, json={"ref": default_branch})
+            if resp.status_code != 204:
+                fallback_url = f"https://api.github.com/repos/{repo_name}/actions/workflows/bot.yml/dispatches"
+                fallback_resp = await client.post(fallback_url, headers=headers, json={"ref": default_branch})
+                if fallback_resp.status_code != 204:
+                    return JSONResponse(status_code=fallback_resp.status_code, content={"error": f"Failed to dispatch: {fallback_resp.text}"})
+            
+            p_list = load_projects_py()
+            idx = next((i for i, p in enumerate(p_list) if p.get("repo_name") == repo_name), -1)
+            if idx != -1:
+                p_list[idx]["status"] = "online"
+                from datetime import datetime
+                p_list[idx]["started_at"] = datetime.utcnow().isoformat() + "Z"
+                save_projects_py(p_list)
+                
+            return {"success": True, "message": "Workflow dispatch triggered successfully."}
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/workflow/stop")
+async def workflow_stop_py(payload: WorkflowStopRequest):
+    repo_name = payload.repo_name
+    github_token = payload.github_token
+    
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "telegram-bot-backend",
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            runs_resp = await client.get(f"https://api.github.com/repos/{repo_name}/actions/runs?status=in_progress", headers=headers)
+            if runs_resp.status_code != 200:
+                return JSONResponse(status_code=runs_resp.status_code, content={"error": f"GitHub error: {runs_resp.text}"})
+            
+            runs = runs_resp.json().get("workflow_runs", [])
+            cancelled_count = 0
+            for run in runs:
+                path = run.get("path", "")
+                name = run.get("name", "")
+                if name == "24x7 Bot Runner" or "mbhp_bot.yml" in path or "bot.yml" in path:
+                    cancel_resp = await client.post(f"https://api.github.com/repos/{repo_name}/actions/runs/{run.get('id')}/cancel", headers=headers)
+                    if cancel_resp.status_code == 202:
+                        cancelled_count += 1
+                        
+            p_list = load_projects_py()
+            idx = next((i for i, p in enumerate(p_list) if p.get("repo_name") == repo_name), -1)
+            if idx != -1:
+                p_list[idx]["status"] = "offline"
+                save_projects_py(p_list)
+                
+            return {"success": True, "cancelled_count": cancelled_count, "message": f"Cancelled {cancelled_count} running bot instances."}
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/workflow/restart")
+async def workflow_restart_py(payload: WorkflowRestartRequest):
+    repo_name = payload.repo_name
+    github_token = payload.github_token
+    branch = payload.branch or "main"
+    
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "telegram-bot-backend",
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            # 1. Cancel in-progress runs
+            runs_resp = await client.get(f"https://api.github.com/repos/{repo_name}/actions/runs?status=in_progress", headers=headers)
+            if runs_resp.status_code == 200:
+                runs = runs_resp.json().get("workflow_runs", [])
+                for run in runs:
+                    path = run.get("path", "")
+                    name = run.get("name", "")
+                    if name == "24x7 Bot Runner" or "mbhp_bot.yml" in path or "bot.yml" in path:
+                        await client.post(f"https://api.github.com/repos/{repo_name}/actions/runs/{run.get('id')}/cancel", headers=headers)
+            
+            import asyncio
+            await asyncio.sleep(1.5)
+            
+            # 2. Start workflow
+            url = f"https://api.github.com/repos/{repo_name}/actions/workflows/mbhp_bot.yml/dispatches"
+            resp = await client.post(url, headers=headers, json={"ref": branch})
+            if resp.status_code != 204:
+                fallback_url = f"https://api.github.com/repos/{repo_name}/actions/workflows/bot.yml/dispatches"
+                fallback_resp = await client.post(fallback_url, headers=headers, json={"ref": branch})
+                if fallback_resp.status_code != 204:
+                    return JSONResponse(status_code=fallback_resp.status_code, content={"error": f"Failed to trigger restart: {fallback_resp.text}"})
+                    
+            p_list = load_projects_py()
+            idx = next((i for i, p in enumerate(p_list) if p.get("repo_name") == repo_name), -1)
+            if idx != -1:
+                p_list[idx]["status"] = "online"
+                from datetime import datetime
+                p_list[idx]["started_at"] = datetime.utcnow().isoformat() + "Z"
+                save_projects_py(p_list)
+                
+            return {"success": True, "message": "Bot node restarted successfully."}
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/api/workflow/logs")
+async def workflow_logs_py(repo_name: str, github_token: str, run_id: Optional[int] = None):
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "telegram-bot-backend",
+    }
+    async with httpx.AsyncClient() as client:
+        try:
+            target_run_id = run_id
+            if not target_run_id:
+                runs_resp = await client.get(f"https://api.github.com/repos/{repo_name}/actions/runs?per_page=10", headers=headers)
+                if runs_resp.status_code != 200:
+                    return JSONResponse(status_code=runs_resp.status_code, content={"error": "Failed to fetch runs"})
+                runs = runs_resp.json().get("workflow_runs", [])
+                bot_runs = [r for r in runs if r.get("name") == "24x7 Bot Runner" or "mbhp_bot.yml" in r.get("path", "") or "bot.yml" in r.get("path", "")]
+                if not bot_runs:
+                    return {"logs": "No bot workflow runs found."}
+                target_run_id = bot_runs[0].get("id")
+                
+            jobs_resp = await client.get(f"https://api.github.com/repos/{repo_name}/actions/runs/{target_run_id}/jobs", headers=headers)
+            if jobs_resp.status_code != 200:
+                return JSONResponse(status_code=jobs_resp.status_code, content={"error": "Failed to fetch jobs for run"})
+            jobs = jobs_resp.json().get("jobs", [])
+            if not jobs:
+                return {"logs": "No jobs found for this run. Preparing logs..."}
+                
+            first_job = jobs[0]
+            job_id = first_job.get("id")
+            
+            logs_resp = await client.get(f"https://api.github.com/repos/{repo_name}/actions/jobs/{job_id}/logs", headers=headers, follow_redirects=True)
+            if logs_resp.status_code != 200:
+                return {
+                    "logs": f"[System Log] Job status is: {first_job.get('status')}. Logs will appear once it starts executing.",
+                    "steps": first_job.get("steps", [])
+                }
+                
+            logs_text = logs_resp.text
+            lines = logs_text.split("\n")
+            cropped_logs = "\n".join(lines[-300:])
+            return {
+                "logs": cropped_logs,
+                "steps": first_job.get("steps", [])
+            }
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": str(e)})
+
 @app.post("/api/webhook")
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
