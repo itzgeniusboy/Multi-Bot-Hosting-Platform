@@ -33,6 +33,9 @@ export interface SavedBot {
   entryFile: string;
   deployedAt: string;
   workflowFile: string;
+  botName?: string;
+  botUsername?: string;
+  botId?: number;
 }
 
 export interface LogEntry {

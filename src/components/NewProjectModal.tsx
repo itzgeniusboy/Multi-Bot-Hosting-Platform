@@ -38,6 +38,7 @@ export default function NewProjectModal({
   const [selectedScript, setSelectedScript] = useState('python main.py');
   const [deployResult, setDeployResult] = useState<any>(null);
   const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
+  const [verifiedBotInfo, setVerifiedBotInfo] = useState<{ botName: string; botUsername: string; botId: number } | null>(null);
 
   const tiltRef = use3DTilt(true);
 
@@ -105,13 +106,21 @@ export default function NewProjectModal({
 
   // Handle successful deployment
   const handleDeploymentSuccess = (result: any) => {
-    setDeployResult(result);
+    const entryFile = selectedScript.split(' ').pop() || 'bot.py';
+    const language = selectedScript.toLowerCase().includes('python') || selectedScript.toLowerCase().includes('.py') ? 'python' : 'node';
+    const [owner, name] = selectedRepo.split('/');
+    
+    const enrichedResult = {
+      ...result,
+      botName: verifiedBotInfo?.botName,
+      botUsername: verifiedBotInfo?.botUsername,
+      botId: verifiedBotInfo?.botId,
+      deployedAt: new Date().toISOString(),
+      scriptName: selectedScript,
+    };
+    setDeployResult(enrichedResult);
     
     try {
-      const entryFile = selectedScript.split(' ').pop() || 'bot.py';
-      const language = selectedScript.toLowerCase().includes('python') || selectedScript.toLowerCase().includes('.py') ? 'python' : 'node';
-      const [owner, name] = selectedRepo.split('/');
-      
       const botObject = {
         id: Date.now(),
         repoOwner: owner || 'username',
@@ -120,7 +129,10 @@ export default function NewProjectModal({
         language: language,
         entryFile: entryFile,
         deployedAt: new Date().toISOString(),
-        workflowFile: "mbhp_bot.yml"
+        workflowFile: "mbhp_bot.yml",
+        botName: verifiedBotInfo?.botName || undefined,
+        botUsername: verifiedBotInfo?.botUsername || undefined,
+        botId: verifiedBotInfo?.botId || undefined
       };
 
       const saved = localStorage.getItem('multi_bot_saved_bots');
@@ -148,6 +160,7 @@ export default function NewProjectModal({
     setSelectedScript('python bot.py');
     setEnvVars([]);
     setDeployResult(null);
+    setVerifiedBotInfo(null);
     onClose();
   };
 
@@ -281,6 +294,8 @@ export default function NewProjectModal({
                   onBack={() => setStep('select_repo')}
                   envVars={envVars}
                   setEnvVars={setEnvVars}
+                  verifiedBotInfo={verifiedBotInfo}
+                  setVerifiedBotInfo={setVerifiedBotInfo}
                 />
               )}
 

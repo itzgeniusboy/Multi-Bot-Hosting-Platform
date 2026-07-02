@@ -172,11 +172,15 @@ function SavedBotCard({
     );
   }
 
+  const botUsername = bot.botUsername;
+  const botName = bot.botName || 'Telegram Bot';
+  const telegramUrl = botUsername ? `https://t.me/${botUsername}` : 'https://t.me';
+
   return (
     <div
       ref={tiltRef}
       style={{ animationDelay: `${index * 80}ms` }}
-      className="animate-card-fade-in premium-glass-card rounded-2xl p-5 border border-[#00D4FF]/15 bg-[#050B18]/50 hover:bg-[#050B18]/70 hover:border-[#00D4FF]/30 transition-all duration-300 flex flex-col justify-between min-h-[240px] relative group shadow-[0_15px_30px_rgba(0,0,0,0.5)]"
+      className="animate-card-fade-in premium-glass-card rounded-2xl p-5 border border-[#00D4FF]/15 bg-[#050B18]/50 hover:bg-[#050B18]/70 hover:border-[#00D4FF]/30 transition-all duration-300 flex flex-col justify-between min-h-[260px] relative group shadow-[0_15px_30px_rgba(0,0,0,0.5)]"
     >
       {/* Delete/untrack hover button */}
       <button
@@ -191,24 +195,47 @@ function SavedBotCard({
       </button>
 
       <div>
-        {/* Repo Title & Status Badge */}
-        <div className="flex items-start justify-between gap-2.5 mb-3.5">
-          <span className="font-display font-bold text-[#F0F6FF] text-[13px] tracking-wide truncate max-w-[70%]" title={bot.repoFullName}>
-            {bot.repoFullName}
-          </span>
+        {/* Username/Repo & Status Badge */}
+        <div className="flex items-center justify-between gap-2.5 mb-2.5">
+          {botUsername ? (
+            <a
+              href={telegramUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-cyan-400 hover:text-cyan-300 font-mono text-[14px] font-bold tracking-wide truncate max-w-[70%] cursor-pointer hover:underline flex items-center gap-1 min-h-[44px]"
+            >
+              @{botUsername}
+              <ExternalLink className="w-3 h-3 text-[#00D4FF]/70" />
+            </a>
+          ) : (
+            <span className="text-neutral-500 italic text-[13px] font-mono select-text min-h-[44px] flex items-center">
+              @not_configured
+            </span>
+          )}
           <span className={`px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-md border shrink-0 ${getBadgeStyles()}`}>
-            {status}
+            [{status}]
           </span>
         </div>
 
-        {/* Details section */}
+        {/* Bot Name & Repo Full Name */}
+        <div className="space-y-1 mb-3.5">
+          <h4 className="text-white font-bold text-sm select-text">
+            {botName}
+          </h4>
+          <p className="text-[11px] text-[#4A6080] truncate select-text font-mono" title={bot.repoFullName}>
+            {bot.repoFullName}
+          </p>
+        </div>
+
+        {/* Language Badge & Info */}
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs text-neutral-400">
-            <Code className="w-3.5 h-3.5 text-[#00D4FF]" />
-            <span className="font-sans font-medium capitalize text-[11px] sm:text-xs">{bot.language} • {bot.entryFile}</span>
+            <span className="px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-md border border-[#00D4FF]/20 bg-[#00D4FF]/5 text-[#00D4FF] capitalize">
+              {bot.language} • {bot.entryFile}
+            </span>
           </div>
           <div className="flex items-center gap-1.5 text-xs text-neutral-400">
-            <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />
+            <RefreshCw className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
             <span className="font-mono text-[10px] sm:text-[11px] text-neutral-500">Last run: {lastRunText}</span>
           </div>
         </div>
@@ -240,7 +267,7 @@ function SavedBotCard({
             {actionLoading === 'stopping' ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
             ) : (
-              <Power className="w-3 h-3 text-rose-400" />
+              <Power className="w-3.5 h-3.5 text-rose-400" />
             )}
             <span>{actionLoading === 'stopping' ? 'stopping' : 'STOP'}</span>
           </button>

@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Bot, Key, Code, HelpCircle, Plus, Trash2, Settings, Terminal, Shield, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Bot, Key, Code, HelpCircle, Plus, Trash2, Settings, Terminal, Shield, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 interface ProjectConfigFormProps {
   selectedRepo: string;
   botToken: string;
   setBotToken: (token: string) => void;
-  selectedScript: string; // Used for RUN_COMMAND now
+  selectedScript: string;
   setSelectedScript: (script: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onBack: () => void;
   envVars: { key: string; value: string }[];
   setEnvVars: React.Dispatch<React.SetStateAction<{ key: string; value: string }[]>>;
+  verifiedBotInfo: { botName: string; botUsername: string; botId: number } | null;
+  setVerifiedBotInfo: (info: { botName: string; botUsername: string; botId: number } | null) => void;
 }
 
 export default function ProjectConfigForm({
@@ -23,11 +25,19 @@ export default function ProjectConfigForm({
   onBack,
   envVars,
   setEnvVars,
+  verifiedBotInfo,
+  setVerifiedBotInfo,
 }: ProjectConfigFormProps) {
   const [projectName, setProjectName] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
+  
+  // Verification states
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  
+  const lastValidatedToken = useRef('');
 
   // Auto-initialize project name from repo name on select
   useEffect(() => {
@@ -41,6 +51,73 @@ export default function ProjectConfigForm({
       }
     }
   }, [selectedRepo]);
+
+  // Debounce hook for BOT_TOKEN typing
+  useEffect(() => {
+    if (!botToken.trim()) {
+      setValidationError(null);
+      setVerifiedBotInfo(null);
+      setIsValidating(false);
+      lastValidatedToken.current = '';
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      validateToken(botToken.trim());
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [botToken]);
+
+  const validateToken = async (token: string) => {
+    if (!token.trim()) {
+      setValidationError(null);
+      setVerifiedBotInfo(null);
+      setIsValidating(false);
+      lastValidatedToken.current = '';
+      return;
+    }
+
+    if (token === lastValidatedToken.current) return;
+    lastValidatedToken.current = token;
+
+    setIsValidating(true);
+    setValidationError(null);
+    setVerifiedBotInfo(null);
+
+    try {
+      const resp = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.ok && data.result) {
+          setVerifiedBotInfo({
+            botName: data.result.first_name,
+            botUsername: data.result.username,
+            botId: data.result.id,
+          });
+          setValidationError(null);
+        } else {
+          setValidationError('Invalid token. Get it from @BotFather');
+          setVerifiedBotInfo(null);
+        }
+      } else {
+        setValidationError('Invalid token. Get it from @BotFather');
+        setVerifiedBotInfo(null);
+      }
+    } catch (err) {
+      console.error('Error validating bot token:', err);
+      setValidationError('Failed to validate token. Please check internet connection.');
+      setVerifiedBotInfo(null);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const handleBlur = () => {
+    if (botToken.trim()) {
+      validateToken(botToken.trim());
+    }
+  };
 
   const handleAddSecret = () => {
     if (newKey.trim() && newValue.trim()) {
@@ -57,6 +134,8 @@ export default function ProjectConfigForm({
     setEnvVars(envVars.filter((_, idx) => idx !== index));
   };
 
+  const isSubmitDisabled = isValidating || (botToken.trim().length > 0 && (!verifiedBotInfo || validationError !== null));
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
       {/* Left Side: Inputs and settings (8 columns) */}
@@ -65,14 +144,14 @@ export default function ProjectConfigForm({
           <span className="text-[10px] font-mono tracking-widest text-[#00D4FF] uppercase font-bold">
             STEP 2 // CONFIGURATION
           </span>
-          <h3 className="text-xl font-display font-extrabold text-white tracking-tight">
+          <h3 className="text-xl font-display font-extrabold text-white tracking-tight uppercase">
             Configure Bot Environment
           </h3>
           <p className="text-xs text-[#4A6080]">
             Your bot source code remains untouched in your GitHub repository. Here, you configure how the multi-bot platform executes your daemon process and manages secrets.
           </p>
         </div>
-
+ 
         {/* Display Name */}
         <div className="space-y-2">
           <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4A6080] flex items-center gap-1.5">
@@ -121,7 +200,7 @@ export default function ProjectConfigForm({
           </div>
 
           {/* Special Bot Token Field */}
-          <div className="space-y-2 p-4 rounded-xl border border-[#00D4FF]/10 bg-[#050B18]/40">
+          <div className="space-y-3 p-4 rounded-xl border border-[#00D4FF]/10 bg-[#050B18]/40">
             <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4A6080] flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Key className="w-3.5 h-3.5 text-[#00D4FF]" />
@@ -136,17 +215,46 @@ export default function ProjectConfigForm({
                 type={showToken ? 'text' : 'password'}
                 value={botToken}
                 onChange={(e) => setBotToken(e.target.value)}
-                className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#00D4FF] focus:ring-1 focus:ring-[#00D4FF] rounded-xl pl-4 pr-12 h-12 sm:h-11 py-3 text-base sm:text-xs text-[#F0F6FF] font-mono outline-none transition-all placeholder:text-[#4A6080]"
+                onBlur={handleBlur}
+                className="w-full bg-[#050B18]/60 border border-[#00D4FF]/10 hover:border-[#00D4FF]/25 focus:border-[#00D4FF] focus:ring-1 focus:ring-[#00D4FF] rounded-xl pl-4 pr-16 h-12 sm:h-11 py-3 text-base sm:text-xs text-[#F0F6FF] font-mono outline-none transition-all placeholder:text-[#4A6080]"
                 placeholder="1234567890:ABCDefGhIJKlmNoPQRsTUVwxyZ... (Optional)"
               />
-              <button
-                type="button"
-                onClick={() => setShowToken(!showToken)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#4A6080] hover:text-white transition-colors cursor-pointer"
-              >
-                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                {isValidating && (
+                  <Loader2 className="w-4 h-4 text-[#00D4FF] animate-spin shrink-0" />
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowToken(!showToken)}
+                  className="text-[#4A6080] hover:text-white transition-colors cursor-pointer p-0.5"
+                >
+                  {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
+
+            {/* Error Display */}
+            {validationError && (
+              <p className="text-xs text-rose-400 font-mono flex items-center gap-1 mt-1.5" id="bot-validation-error">
+                <span className="text-sm">⚠</span> {validationError}
+              </p>
+            )}
+
+            {/* Green verification details card */}
+            {verifiedBotInfo && !validationError && (
+              <div className="p-4 border-l-[3px] border-emerald-500 bg-emerald-500/5 rounded-r-xl space-y-1 w-full text-left mt-2" id="bot-verified-box">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                  <span className="text-base">✓</span>
+                  <span>Bot Verified</span>
+                </div>
+                <div className="text-[14px] font-mono text-slate-300">
+                  <span className="text-[#4A6080]">Name:</span> {verifiedBotInfo.botName}
+                </div>
+                <div className="text-[14px] font-mono text-slate-300">
+                  <span className="text-[#4A6080]">Username:</span> <span className="text-cyan-400 font-bold">@{verifiedBotInfo.botUsername}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Other Custom Environment Secrets */}
@@ -248,7 +356,8 @@ export default function ProjectConfigForm({
             <button
               type="button"
               onClick={onSubmit}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#00D4FF] to-[#7C3AED] text-[#050B18] hover:opacity-95 active:scale-[0.99] transition-all font-sans text-xs font-bold uppercase tracking-widest text-white shadow-lg shadow-[#00D4FF]/10 flex items-center justify-center gap-2 cursor-pointer"
+              disabled={isSubmitDisabled}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#00D4FF] to-[#7C3AED] text-[#050B18] hover:opacity-95 active:scale-[0.99] transition-all font-sans text-xs font-bold uppercase tracking-widest text-white shadow-lg shadow-[#00D4FF]/10 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
             >
               Commit & Setup Bot
             </button>
