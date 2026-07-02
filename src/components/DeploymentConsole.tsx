@@ -97,7 +97,7 @@ export default function DeploymentConsole({
       await new Promise((r) => setTimeout(r, 600));
 
       try {
-        const wfResp = await fetch('/api/workflow/setup', {
+        const wfResp = await fetch(new URL('/api/workflow/setup', window.location.href).href, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ repo_name: repoName, github_token: githubToken })
@@ -135,7 +135,7 @@ export default function DeploymentConsole({
           
           for (const sec of secretsToSet) {
             addLog(`Encrypting secret: ${sec.key}...`, 'info');
-            const secResp = await fetch('/api/secrets/set', {
+            const secResp = await fetch(new URL('/api/secrets/set', window.location.href).href, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -165,7 +165,7 @@ export default function DeploymentConsole({
         addLog('Registering repository reference in system cluster state...', 'info');
         await new Promise((r) => setTimeout(r, 600));
 
-        const regResp = await fetch('/api/projects', {
+        const regResp = await fetch(new URL('/api/projects', window.location.href).href, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -190,7 +190,7 @@ export default function DeploymentConsole({
         addLog('Dispatching start trigger to GitHub Actions API gateway...', 'info');
         await new Promise((r) => setTimeout(r, 600));
 
-        const startResp = await fetch('/api/workflow/start', {
+        const startResp = await fetch(new URL('/api/workflow/start', window.location.href).href, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

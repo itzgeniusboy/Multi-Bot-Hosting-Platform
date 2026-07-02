@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Search, GitBranch, Globe, Lock, Loader2, Database, ChevronRight, Github } from 'lucide-react';
+import { use3DTilt } from '../hooks/use3DTilt';
 
 interface Repo {
   id: number | string;
@@ -24,6 +25,72 @@ const DEMO_REPOS: Repo[] = [
   { id: 'demo-3', name: 'feedback-moderator', full_name: 'sandbox/feedback-moderator', private: true, default_branch: 'main' },
 ];
 
+interface RepoCardProps {
+  repo: Repo;
+  isSelected: boolean;
+  onSelect: (fullName: string) => void;
+  index: number;
+}
+
+function RepoCard({ repo, isSelected, onSelect, index }: RepoCardProps) {
+  const tiltRef = use3DTilt(true);
+
+  return (
+    <div
+      ref={tiltRef}
+      onClick={() => onSelect(repo.full_name)}
+      style={{ animationDelay: `${index * 80}ms` }}
+      className={`animate-card-fade-in p-4 rounded-xl border transition-all duration-300 flex items-center justify-between cursor-pointer group relative ${
+        isSelected
+          ? 'bg-[#00D4FF]/8 border-[#00D4FF] border-l-4 border-l-[#00D4FF] shadow-[0_0_20px_rgba(0,212,255,0.08)]'
+          : 'bg-[#050B18]/40 border-[#00D4FF]/10 hover:border-[#00D4FF]/30 hover:bg-[#00D4FF]/2'
+      }`}
+    >
+      {/* Checkmark in top-right corner */}
+      {isSelected && (
+        <div className="absolute top-2.5 right-2.5 text-[#00D4FF]">
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-lg border transition-colors ${
+          isSelected ? 'bg-[#00D4FF]/10 border-[#00D4FF]/20 text-[#00D4FF]' : 'bg-[#050B18]/80 border-[#00D4FF]/5 text-[#4A6080] group-hover:text-white'
+        }`}>
+          <Github className="w-4 h-4" />
+        </div>
+        <div className="space-y-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-mono font-bold text-[#F0F6FF] group-hover:text-[#00D4FF] transition-colors truncate max-w-[130px] sm:max-w-[180px]" title={repo.name}>
+              {repo.name}
+            </span>
+            <span className="text-[9px] font-mono tracking-widest px-1.5 py-0.5 rounded-full bg-[#050B18]/80 border border-[#00D4FF]/10 text-[#4A6080] flex items-center gap-1">
+              {repo.private ? <Lock className="w-2 h-2 text-rose-400" /> : <Globe className="w-2 h-2 text-emerald-400" />}
+              {repo.private ? 'Private' : 'Public'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[10px] text-[#4A6080] font-mono">
+            <GitBranch className="w-3 h-3 text-[#4A6080]" />
+            <span>{repo.default_branch}</span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={`px-3 py-1.5 rounded-lg font-mono text-[10px] font-bold tracking-wider uppercase transition-all flex items-center gap-1 shrink-0 whitespace-nowrap ${
+          isSelected
+            ? 'bg-[#00D4FF]/20 text-[#00D4FF]'
+            : 'bg-[#050B18]/60 text-[#4A6080] group-hover:text-white'
+        }`}
+      >
+        {isSelected ? 'Selected' : 'Select'}
+      </div>
+    </div>
+  );
+}
+
 export default function RepoSelector({
   repos,
   selectedRepo,
@@ -40,11 +107,6 @@ export default function RepoSelector({
     repo.full_name.toLowerCase().includes(search.toLowerCase()) ||
     repo.name.toLowerCase().includes(search.toLowerCase())
   );
-
-  const handleSelect = (fullName: string) => {
-    onSelectRepo(fullName);
-    onNext();
-  };
 
   return (
     <div className="space-y-6">
@@ -82,55 +144,15 @@ export default function RepoSelector({
             <span className="text-xs text-[#4A6080]">No matching repositories found.</span>
           </div>
         ) : (
-          filteredRepos.map((repo) => {
-            const isSelected = selectedRepo === repo.full_name;
-            return (
-              <div
-                key={repo.id}
-                onClick={() => handleSelect(repo.full_name)}
-                className={`p-4 rounded-xl border transition-all duration-300 flex items-center justify-between cursor-pointer group ${
-                  isSelected
-                    ? 'bg-[#00D4FF]/5 border-[#00D4FF] shadow-[0_0_20px_rgba(0,212,255,0.08)]'
-                    : 'bg-[#050B18]/40 border-[#00D4FF]/10 hover:border-[#00D4FF]/30 hover:bg-[#00D4FF]/2'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg border transition-colors ${
-                    isSelected ? 'bg-[#00D4FF]/10 border-[#00D4FF]/20 text-[#00D4FF]' : 'bg-[#050B18]/80 border-[#00D4FF]/5 text-[#4A6080] group-hover:text-white'
-                  }`}>
-                    <Github className="w-4 h-4" />
-                  </div>
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-[#F0F6FF] group-hover:text-[#00D4FF] transition-colors truncate max-w-[130px] sm:max-w-[180px]" title={repo.name}>
-                        {repo.name}
-                      </span>
-                      <span className="text-[9px] font-mono tracking-widest px-1.5 py-0.5 rounded-full bg-[#050B18]/80 border border-[#00D4FF]/10 text-[#4A6080] flex items-center gap-1">
-                        {repo.private ? <Lock className="w-2 h-2 text-rose-400" /> : <Globe className="w-2 h-2 text-emerald-400" />}
-                        {repo.private ? 'Private' : 'Public'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[10px] text-[#4A6080] font-mono">
-                      <GitBranch className="w-3 h-3 text-[#4A6080]" />
-                      <span>{repo.default_branch}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className={`px-3 py-1.5 rounded-lg font-mono text-[10px] font-bold tracking-wider uppercase transition-all flex items-center gap-1 shrink-0 whitespace-nowrap ${
-                    isSelected
-                      ? 'bg-[#00D4FF] text-[#050B18]'
-                      : 'bg-[#00D4FF]/10 text-[#00D4FF] group-hover:bg-[#00D4FF] group-hover:text-[#050B18]'
-                  }`}
-                >
-                  Import
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            );
-          })
+          filteredRepos.map((repo, idx) => (
+            <RepoCard
+              key={repo.id}
+              repo={repo}
+              isSelected={selectedRepo === repo.full_name}
+              onSelect={onSelectRepo}
+              index={idx}
+            />
+          ))
         )}
       </div>
 
@@ -138,10 +160,27 @@ export default function RepoSelector({
         <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-start gap-2.5">
           <Database className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
           <p className="text-[10px] text-[#4A6080] leading-relaxed">
-            No active GitHub repositories loaded. We have supplied sandbox environments for quick setup. Click Import to continue configuring.
+            No active GitHub repositories loaded. We have supplied sandbox environments for quick setup. Click to select a repo and continue.
           </p>
         </div>
       )}
+
+      {/* Continue Button */}
+      <div className="pt-4 border-t border-[#00D4FF]/10 flex justify-end">
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={!selectedRepo}
+          className={`w-full py-3 rounded-xl font-sans text-xs font-bold uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${
+            selectedRepo
+              ? 'bg-[#00D4FF] text-[#050B18] hover:bg-[#00D4FF]/90 shadow-lg shadow-[#00D4FF]/10'
+              : 'bg-[#0A1628] border border-[#00D4FF]/10 text-[#4A6080] opacity-40 pointer-events-none'
+          }`}
+        >
+          Continue to Configuration
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 }

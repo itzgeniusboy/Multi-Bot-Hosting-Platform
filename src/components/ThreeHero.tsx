@@ -130,28 +130,28 @@ export default function ThreeHero({ reduceAnimation }: ThreeHeroProps) {
 
     const mat1 = new THREE.PointsMaterial({
       color: 0x00D4FF,
-      size: 0.22,
+      size: 0.28,
       map: cyanTexture,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      opacity: 0.55,
+      opacity: 0.7,
     });
 
     const mat2 = new THREE.PointsMaterial({
-      color: 0x7C3AED,
-      size: 0.14,
-      map: violetTexture,
+      color: 0x00D4FF,
+      size: 0.18,
+      map: cyanTexture,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      opacity: 0.45,
+      opacity: 0.5,
     });
 
     const mat3 = new THREE.PointsMaterial({
-      color: 0xFF3B6B,
-      size: 0.08,
-      map: roseTexture,
+      color: 0x00D4FF,
+      size: 0.09,
+      map: cyanTexture,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
@@ -327,13 +327,13 @@ export default function ThreeHero({ reduceAnimation }: ThreeHeroProps) {
             linePosArr[lineIndex * 6 + 4] = y2;
             linePosArr[lineIndex * 6 + 5] = z2;
 
-            // Segment start color (indigo gradient blend)
-            lineColArr[lineIndex * 6] = 0.48;     // R (7C3AED violetish)
-            lineColArr[lineIndex * 6 + 1] = 0.22; // G
-            lineColArr[lineIndex * 6 + 2] = 0.92; // B
+            // Segment start color (cyan)
+            lineColArr[lineIndex * 6] = 0.0;      // R
+            lineColArr[lineIndex * 6 + 1] = 0.83; // G
+            lineColArr[lineIndex * 6 + 2] = 1.0;  // B
 
-            // Segment end color
-            lineColArr[lineIndex * 6 + 3] = 0.0;  // R (00D4FF cyan)
+            // Segment end color (cyan)
+            lineColArr[lineIndex * 6 + 3] = 0.0;  // R
             lineColArr[lineIndex * 6 + 4] = 0.83; // G
             lineColArr[lineIndex * 6 + 5] = 1.0;  // B
 

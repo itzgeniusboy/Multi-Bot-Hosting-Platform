@@ -30,7 +30,7 @@ export default function LogsViewer({ repoName, githubToken, isOpen, onClose }: L
     let isMounted = true;
     const fetchLogs = async () => {
       try {
-        const resp = await fetch(`/api/workflow/logs?repo_name=${encodeURIComponent(repoName)}&github_token=${encodeURIComponent(githubToken)}`);
+        const resp = await fetch(new URL(`/api/workflow/logs?repo_name=${encodeURIComponent(repoName)}&github_token=${encodeURIComponent(githubToken)}`, window.location.href).href);
         if (!resp.ok) {
           throw new Error('No active runs or logs available yet.');
         }

@@ -41,6 +41,7 @@ import NewProjectModal from './components/NewProjectModal';
 import LogsViewer from './components/LogsViewer';
 import { audio } from './utils/audio';
 import { Project } from './types';
+import { use3DTilt } from './hooks/use3DTilt';
 
 interface AnimatedCounterProps {
   value: number;
@@ -80,52 +81,300 @@ interface AddProjectCardProps {
 }
 
 function AddProjectCard({ onClick }: AddProjectCardProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
+  const tiltRef = use3DTilt(true);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const xc = rect.width / 2;
-    const yc = rect.height / 2;
-    const rotateX = -(y - yc) / 15;
-    const rotateY = (x - xc) / 15;
-    cardRef.current.style.transform = `perspective(600px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
-  };
+  return (
+    <div
+      ref={tiltRef}
+      onClick={onClick}
+      className="animate-card-fade-in premium-glass-card rounded-2xl p-6 border border-dashed border-[#00D4FF]/20 bg-[#050B18]/20 flex flex-col items-center justify-center min-h-[260px] gap-3 group hover:border-[#00D4FF]/40 hover:bg-[#00D4FF]/5 transition-all duration-300 cursor-pointer shadow-[0_15px_40px_rgba(0,0,0,0.4)]"
+    >
+      <div className="p-3.5 rounded-xl border border-dashed border-[#00D4FF]/30 bg-[#050B18]/40 group-hover:bg-[#00D4FF]/10 group-hover:border-[#00D4FF]/40 text-[#00D4FF] transition-all">
+        <Plus className="w-6 h-6" />
+      </div>
+      <div className="text-center space-y-1">
+        <h4 className="text-xs font-mono font-bold text-white tracking-widest uppercase group-hover:text-[#00D4FF] transition-colors">
+          Deploy Daemon Node
+        </h4>
+        <p className="text-[10px] text-[#4A6080] font-sans max-w-[170px]">
+          Bind a new GitHub action background worker loop
+        </p>
+      </div>
+    </div>
+  );
+}
 
-  const handleMouseLeave = () => {
-    if (!cardRef.current) return;
-    cardRef.current.style.transform = `perspective(600px) rotateX(0deg) rotateY(0deg) scale(1)`;
+interface ProjectCardProps {
+  project: Project;
+  botActionLoading: string | null;
+  activeSecretsProject: string | null;
+  setActiveSecretsProject: React.Dispatch<React.SetStateAction<string | null>>;
+  setActiveLogsProject: React.Dispatch<React.SetStateAction<string | null>>;
+  handleStopBot: (repoName: string) => void;
+  handleStartBot: (repoName: string) => void;
+  handleRestartBot: (repoName: string) => void;
+  handleDeleteProject: (repoName: string) => void;
+  handleSaveInlineSecret: (repoName: string) => void;
+  inlineSecretKey: string;
+  setInlineSecretKey: React.Dispatch<React.SetStateAction<string>>;
+  inlineSecretValue: string;
+  setInlineSecretValue: React.Dispatch<React.SetStateAction<string>>;
+  isSavingSecret: boolean;
+  index: number;
+}
+
+function ProjectCard({
+  project,
+  botActionLoading,
+  activeSecretsProject,
+  setActiveSecretsProject,
+  setActiveLogsProject,
+  handleStopBot,
+  handleStartBot,
+  handleRestartBot,
+  handleDeleteProject,
+  handleSaveInlineSecret,
+  inlineSecretKey,
+  setInlineSecretKey,
+  inlineSecretValue,
+  setInlineSecretValue,
+  isSavingSecret,
+  index
+}: ProjectCardProps) {
+  const isOnline = project.status === 'online';
+  const isQueued = project.status === 'queued';
+  const isFailed = project.status === 'failed';
+  const isOffline = project.status === 'offline';
+  const isLoadingAction = botActionLoading === project.repo_name;
+  const isSecretsOpen = activeSecretsProject === project.repo_name;
+
+  const tiltRef = use3DTilt(true);
+
+  const getUptimeText = (startedAt: string | undefined) => {
+    if (!isOnline || !startedAt) return 'Offline';
+    const diff = Date.now() - new Date(startedAt).getTime();
+    if (diff <= 0) return 'Just started';
+    const secs = Math.floor(diff / 1000);
+    const mins = Math.floor(secs / 60);
+    const hrs = Math.floor(mins / 60);
+    const days = Math.floor(hrs / 24);
+    
+    if (days > 0) return `${days}d ${hrs % 24}h`;
+    if (hrs > 0) return `${hrs}h ${mins % 60}m`;
+    if (mins > 0) return `${mins}m ${secs % 60}s`;
+    return `${secs}s`;
   };
 
   return (
     <div
-      ref={cardRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      onClick={onClick}
-      className="premium-glass-card rounded-2xl border-2 border-dashed border-[#00D4FF]/25 hover:border-[#00D4FF]/60 bg-[#0A1628]/35 p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 min-h-[260px] relative overflow-hidden group shadow-[0_15px_40px_rgba(0,0,0,0.4)]"
+      ref={tiltRef}
+      style={{ animationDelay: `${index * 80}ms` }}
+      className="animate-card-fade-in premium-glass-card rounded-2xl p-5 border border-[#00D4FF]/10 bg-[#050B18]/40 flex flex-col justify-between min-h-[260px] relative overflow-hidden group hover:border-[#00D4FF]/30 transition-all duration-300"
     >
-      <div className="absolute inset-0 card-grid-pattern opacity-5 pointer-events-none"></div>
-      <div className="absolute inset-0 bg-gradient-to-br from-[#00D4FF]/0 to-[#7C3AED]/0 group-hover:from-[#00D4FF]/5 group-hover:to-[#7C3AED]/5 transition-all duration-500"></div>
+      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#00D4FF]/5 to-transparent rounded-full filter blur-xl pointer-events-none"></div>
 
-      <div className="p-4 rounded-full bg-[#00D4FF]/10 border border-[#00D4FF]/20 text-[#00D4FF] group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(0,212,255,0.2)] transition-all duration-300 mb-4">
-        <Plus className="w-8 h-8 text-[#00D4FF]" />
+      <div className="space-y-4">
+        {/* Header: Name and Status Badge */}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-mono font-bold text-[#F0F6FF] tracking-wide truncate max-w-[130px]" title={project.repo_name}>
+            {stripEmojis(project.repo_name.split('/')[1] || project.repo_name)}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${
+              isOnline ? 'bg-emerald-400 animate-pulse' :
+              isQueued ? 'bg-cyan-400 animate-pulse' :
+              isFailed ? 'bg-rose-500' : 'bg-slate-500'
+            }`}></span>
+            <span className={`text-[9px] font-mono uppercase font-bold tracking-widest ${
+              isOnline ? 'text-emerald-400' :
+              isQueued ? 'text-cyan-400' :
+              isFailed ? 'text-rose-400' : 'text-[#4A6080]'
+            }`}>
+              {project.status || 'offline'}
+            </span>
+          </div>
+        </div>
+
+        {/* Details Namespace & Branch Link */}
+        <div className="space-y-1">
+          <a
+            href={`https://github.com/${project.repo_name}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-mono text-[#4A6080] hover:text-[#00D4FF] transition-all flex items-center gap-1.5"
+          >
+            github.com/{stripEmojis(project.repo_name)}
+            <ExternalLink className="w-3 h-3 text-[#4A6080]" />
+          </a>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="text-[9px] font-mono tracking-widest px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase font-semibold">
+              {project.script_name || 'python main.py'}
+            </span>
+            <span className="text-[9px] font-mono tracking-widest px-2 py-0.5 rounded-full bg-[#00D4FF]/5 text-[#00D4FF] border border-[#00D4FF]/10 uppercase font-semibold">
+              {project.health || 'healthy'}
+            </span>
+          </div>
+        </div>
+
+        {/* Inline Uptime */}
+        <div className="pt-3 border-t border-[#00D4FF]/5 grid grid-cols-2 gap-2 font-mono text-[10px]">
+          <div>
+            <span className="text-[#4A6080] block">TRIGGER LOAD</span>
+            <span className="text-white font-bold">{project.request_count || 0} hits</span>
+          </div>
+          <div>
+            <span className="text-[#4A6080] block">ACTIVE UPTIME</span>
+            <span className={`font-bold ${isOnline ? 'text-emerald-400' : 'text-[#4A6080]'}`}>
+              {getUptimeText(project.started_at)}
+            </span>
+          </div>
+        </div>
       </div>
-      <h3 className="text-xs font-display font-extrabold text-white tracking-widest uppercase">
-        Import Bot Project
-      </h3>
-      <p className="text-[10px] text-[#4A6080] mt-2 max-w-[200px] leading-relaxed">
-        Connect repository, generate GitHub workflow, and deploy 24x7 bot runtime instantly.
-      </p>
+
+      {/* Collapsible inline Secrets Form */}
+      {isSecretsOpen && (
+        <div className="mt-4 pt-3 border-t border-[#00D4FF]/10 bg-[#050B18]/60 p-3 rounded-xl space-y-2.5 text-left">
+          <span className="text-[9px] font-mono text-[#00D4FF] uppercase tracking-wider block font-bold">
+            Configure Secret Key
+          </span>
+          <div className="space-y-2">
+            <input
+              type="text"
+              placeholder="SECRET_KEY_NAME"
+              value={inlineSecretKey}
+              onChange={(e) => setInlineSecretKey(e.target.value.toUpperCase())}
+              className="w-full bg-[#050B18] border border-[#00D4FF]/10 rounded-lg px-2.5 py-1 text-[10px] font-mono text-white outline-none focus:border-[#00D4FF] placeholder:text-[#4A6080]"
+            />
+            <input
+              type="password"
+              placeholder="Enter secret value"
+              value={inlineSecretValue}
+              onChange={(e) => setInlineSecretValue(e.target.value)}
+              className="w-full bg-[#050B18] border border-[#00D4FF]/10 rounded-lg px-2.5 py-1 text-[10px] font-mono text-white outline-none focus:border-[#00D4FF] placeholder:text-[#4A6080]"
+            />
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isSavingSecret || !inlineSecretKey.trim() || !inlineSecretValue.trim()}
+                onClick={() => handleSaveInlineSecret(project.repo_name)}
+                className="flex-1 py-1.5 rounded-lg bg-[#00D4FF] text-[#050B18] text-[9px] font-mono font-bold uppercase hover:bg-[#00D4FF]/80 transition-all cursor-pointer disabled:opacity-40"
+              >
+                {isSavingSecret ? 'Saving...' : 'Save Secret'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setInlineSecretKey('');
+                  setInlineSecretValue('');
+                  setActiveSecretsProject(null);
+                }}
+                className="px-2.5 py-1.5 rounded-lg border border-[#4A6080]/20 text-[#4A6080] text-[9px] font-mono font-bold uppercase hover:text-white transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Controls Actions bar */}
+      {!isSecretsOpen && (
+        <div className="space-y-3 pt-4 border-t border-[#00D4FF]/5 mt-4">
+          <div className="flex items-center gap-2">
+            {isOnline ? (
+              <button
+                type="button"
+                onClick={() => handleStopBot(project.repo_name)}
+                disabled={isLoadingAction}
+                className="flex-1 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+              >
+                {isLoadingAction ? (
+                  <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                ) : (
+                  <>
+                    <Power className="w-3 h-3" />
+                    Stop Node
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleStartBot(project.repo_name)}
+                disabled={isLoadingAction}
+                className="flex-1 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+              >
+                {isLoadingAction ? (
+                  <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+                ) : (
+                  <>
+                    <Play className="w-3 h-3 fill-current" />
+                    Start Node
+                  </>
+                )}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => handleRestartBot(project.repo_name)}
+              disabled={isLoadingAction}
+              className="p-2 rounded-xl border border-[#00D4FF]/25 bg-[#00D4FF]/5 text-[#00D4FF] hover:bg-[#00D4FF]/15 transition-all cursor-pointer disabled:opacity-40"
+              title="Restart Workflow"
+            >
+              <RotateCw className={`w-3.5 h-3.5 ${isLoadingAction ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-1 text-[10px] font-mono text-[#4A6080]">
+            <button
+              type="button"
+              onClick={() => {
+                audio.playClick();
+                setActiveSecretsProject(project.repo_name);
+              }}
+              className="hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <Key className="w-3 h-3" />
+              Secrets
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                audio.playClick();
+                setActiveLogsProject(project.repo_name);
+              }}
+              className="hover:text-[#00D4FF] transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <Terminal className="w-3 h-3" />
+              Live Logs
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDeleteProject(project.repo_name)}
+              className="hover:text-rose-400 transition-colors cursor-pointer"
+              title="Untrack Repository"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 const stripEmojis = (text: string | null | undefined): string => {
   if (!text) return '';
-  return text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{27BF}]|[\u{1F1E6}-\u{1F1FF}]|[\u{1F900}-\u{1F9FF}]/gu, '').trim();
+  return text.replace(/[\u{1F300}-\u{1FFFF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|\u{FE0F}/gu, '').trim();
+};
+
+const getAbsoluteUrl = (path: string): string => {
+  if (typeof window !== 'undefined' && window.location) {
+    return new URL(path, window.location.href).href;
+  }
+  return path;
 };
 
 export default function App() {
@@ -203,7 +452,7 @@ export default function App() {
         setGitHubUser(userData);
       }
 
-      const reposResp = await fetch(`/api/repos?token=${token}`);
+      const reposResp = await fetch(getAbsoluteUrl(`/api/repos?token=${token}`));
       if (reposResp.ok) {
         const reposData = await reposResp.json();
         setRepos(reposData);
@@ -219,7 +468,7 @@ export default function App() {
   // Fetch projects from real data endpoints
   const fetchProjectsAndStats = async () => {
     try {
-      const projResp = await fetch('/api/projects');
+      const projResp = await fetch(getAbsoluteUrl('/api/projects'));
       if (projResp.ok) {
         const projData = await projResp.json();
         setActiveProjects(projData);
@@ -265,7 +514,7 @@ export default function App() {
     audio.playClick();
     addToast('Opening GitHub OAuth Gateway...', 'info');
     try {
-      const resp = await fetch('/api/login');
+      const resp = await fetch(getAbsoluteUrl('/api/login'));
       if (resp.ok) {
         const data = await resp.json();
         if (data.url) {
@@ -345,7 +594,7 @@ export default function App() {
     setBotActionLoading(repoName);
     addToast(`Requesting workflow run stop for ${repoName}...`, 'info');
     try {
-      const resp = await fetch('/api/workflow/stop', {
+      const resp = await fetch(getAbsoluteUrl('/api/workflow/stop'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -373,7 +622,7 @@ export default function App() {
     setBotActionLoading(repoName);
     addToast(`Triggering start workflow run for ${repoName}...`, 'info');
     try {
-      const resp = await fetch('/api/workflow/start', {
+      const resp = await fetch(getAbsoluteUrl('/api/workflow/start'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -401,7 +650,7 @@ export default function App() {
     setBotActionLoading(repoName);
     addToast(`Requesting workflow run restart for ${repoName}...`, 'info');
     try {
-      const resp = await fetch('/api/workflow/restart', {
+      const resp = await fetch(getAbsoluteUrl('/api/workflow/restart'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -430,7 +679,7 @@ export default function App() {
     setBotActionLoading(repoName);
     addToast(`Untracking ${repoName}...`, 'info');
     try {
-      const resp = await fetch('/api/projects/delete', {
+      const resp = await fetch(getAbsoluteUrl('/api/projects/delete'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo_name: repoName })
@@ -456,7 +705,7 @@ export default function App() {
     addToast(`Encrypting and committing secret ${inlineSecretKey} to GitHub...`, 'info');
     try {
       const formattedKey = inlineSecretKey.toUpperCase().replace(/[^A-Z0-9_]/g, '_').trim();
-      const resp = await fetch('/api/secrets/set', {
+      const resp = await fetch(getAbsoluteUrl('/api/secrets/set'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -533,8 +782,9 @@ export default function App() {
                   <polygon points="12 2 22 7.5 22 18.5 12 24 2 18.5 2 7.5" />
                 </svg>
               </div>
-              <span className="font-display font-extrabold text-xs tracking-widest text-[#F0F6FF] hidden sm:inline-block">
-                MULTI-BOT ENGINE
+              <span className="font-display font-extrabold text-[10px] sm:text-xs tracking-widest text-[#F0F6FF] whitespace-nowrap">
+                <span className="inline min-[400px]:hidden">MBHP</span>
+                <span className="hidden min-[400px]:inline">MULTI-BOT ENGINE</span>
               </span>
             </div>
 
@@ -570,7 +820,7 @@ export default function App() {
 
           {/* Hero Section */}
           <section id="hero" className="relative min-h-[70vh] flex items-center justify-center pt-32 pb-16 overflow-hidden">
-            <ThreeHero />
+            <ThreeHero reduceAnimation={reduceAnimation} />
 
             <div className="perspective-container">
               <div className="perspective-grid opacity-30" />
@@ -584,7 +834,7 @@ export default function App() {
                 transition={{ duration: 0.8, delay: 0.1 }}
                 className="lg:col-span-7 space-y-6 text-left"
               >
-                <h1 className="text-4xl sm:text-5xl lg:text-7xl font-display font-extrabold tracking-tight text-white leading-[1.08] neon-extrusion-text">
+                <h1 className="animate-hero-title text-4xl sm:text-5xl lg:text-7xl font-display font-extrabold tracking-tight text-white leading-[1.08] neon-extrusion-text">
                   Multi-Bot <br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4FF] via-[#7C3AED] to-[#FF3B6B]">
                     Hosting Platform
@@ -720,20 +970,29 @@ export default function App() {
                       />
                     </div>
 
-                    <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto scrollbar-none">
-                      {(['all', 'online', 'offline', 'queued', 'failed'] as const).map((filter) => (
-                        <button
-                          key={filter}
-                          onClick={() => setBotFilter(filter)}
-                          className={`px-3 py-1.5 rounded-lg font-mono text-[9px] font-bold uppercase tracking-wider border transition-all cursor-pointer whitespace-nowrap ${
-                            botFilter === filter
-                              ? 'bg-[#00D4FF]/15 border-[#00D4FF] text-[#00D4FF]'
-                              : 'bg-transparent border-[#4A6080]/15 text-[#4A6080] hover:text-white hover:border-[#4A6080]/30'
-                          }`}
-                        >
-                          {filter}
-                        </button>
-                      ))}
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 w-full sm:w-auto">
+                      {(['all', 'online', 'queued', 'failed', 'offline'] as const).map((filter) => {
+                        const filterLabels = {
+                          all: 'ALL',
+                          online: 'RUNNING',
+                          queued: 'QUEUED',
+                          failed: 'FAILED',
+                          offline: 'STOPPED'
+                        };
+                        return (
+                          <button
+                            key={filter}
+                            onClick={() => setBotFilter(filter)}
+                            className={`flex-1 sm:flex-initial text-center px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg font-mono text-[8px] sm:text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer whitespace-nowrap ${
+                              botFilter === filter
+                                ? 'bg-[#00D4FF]/15 border-[#00D4FF] text-[#00D4FF]'
+                                : 'bg-transparent border-[#4A6080]/15 text-[#4A6080] hover:text-white hover:border-[#4A6080]/30'
+                            }`}
+                          >
+                            {filterLabels[filter]}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -759,228 +1018,27 @@ export default function App() {
                         if (botFilter === 'all') return true;
                         return project.status === botFilter;
                       })
-                      .map((project) => {
-                        const isOnline = project.status === 'online';
-                        const isQueued = project.status === 'queued';
-                        const isFailed = project.status === 'failed';
-                        const isOffline = project.status === 'offline';
-                        const isLoadingAction = botActionLoading === project.repo_name;
-                        const isSecretsOpen = activeSecretsProject === project.repo_name;
-
-                        // Human-friendly uptime display calculation
-                        const getUptimeText = (startedAt: string | undefined) => {
-                          if (!isOnline || !startedAt) return 'Offline';
-                          const diff = Date.now() - new Date(startedAt).getTime();
-                          if (diff <= 0) return 'Just started';
-                          const secs = Math.floor(diff / 1000);
-                          const mins = Math.floor(secs / 60);
-                          const hrs = Math.floor(mins / 60);
-                          const days = Math.floor(hrs / 24);
-                          
-                          if (days > 0) return `${days}d ${hrs % 24}h`;
-                          if (hrs > 0) return `${hrs}h ${mins % 60}m`;
-                          if (mins > 0) return `${mins}m ${secs % 60}s`;
-                          return `${secs}s`;
-                        };
-
-                        return (
-                          <div
-                            key={project.id}
-                            className="premium-glass-card rounded-2xl p-5 border border-[#00D4FF]/10 bg-[#050B18]/40 flex flex-col justify-between min-h-[260px] relative overflow-hidden group hover:border-[#00D4FF]/30 transition-all duration-300"
-                          >
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#00D4FF]/5 to-transparent rounded-full filter blur-xl pointer-events-none"></div>
-
-                            <div className="space-y-4">
-                              {/* Header: Name and Status Badge */}
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-mono font-bold text-[#F0F6FF] tracking-wide truncate max-w-[130px]" title={project.repo_name}>
-                                  {project.repo_name.split('/')[1] || project.repo_name}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  <span className={`w-2 h-2 rounded-full ${
-                                    isOnline ? 'bg-emerald-400 animate-pulse' :
-                                    isQueued ? 'bg-cyan-400 animate-pulse' :
-                                    isFailed ? 'bg-rose-500' : 'bg-slate-500'
-                                  }`}></span>
-                                  <span className={`text-[9px] font-mono uppercase font-bold tracking-widest ${
-                                    isOnline ? 'text-emerald-400' :
-                                    isQueued ? 'text-cyan-400' :
-                                    isFailed ? 'text-rose-400' : 'text-[#4A6080]'
-                                  }`}>
-                                    {project.status || 'offline'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Details Namespace & Branch Link */}
-                              <div className="space-y-1">
-                                <a
-                                  href={`https://github.com/${project.repo_name}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-xs font-mono text-[#4A6080] hover:text-[#00D4FF] transition-all flex items-center gap-1.5"
-                                >
-                                  github.com/{project.repo_name}
-                                  <ExternalLink className="w-3 h-3 text-[#4A6080]" />
-                                </a>
-
-                                <div className="flex flex-wrap items-center gap-2 pt-1">
-                                  <span className="text-[9px] font-mono tracking-widest px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase font-semibold">
-                                    {project.script_name || 'python main.py'}
-                                  </span>
-                                  <span className="text-[9px] font-mono tracking-widest px-2 py-0.5 rounded-full bg-[#00D4FF]/5 text-[#00D4FF] border border-[#00D4FF]/10 uppercase font-semibold">
-                                    {project.health || 'healthy'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Inline Uptime */}
-                              <div className="pt-3 border-t border-[#00D4FF]/5 grid grid-cols-2 gap-2 font-mono text-[10px]">
-                                <div>
-                                  <span className="text-[#4A6080] block">TRIGGER LOAD</span>
-                                  <span className="text-white font-bold">{project.request_count || 0} hits</span>
-                                </div>
-                                <div>
-                                  <span className="text-[#4A6080] block">ACTIVE UPTIME</span>
-                                  <span className={`font-bold ${isOnline ? 'text-emerald-400' : 'text-[#4A6080]'}`}>
-                                    {getUptimeText(project.started_at)}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Collapsible inline Secrets Form */}
-                            {isSecretsOpen && (
-                              <div className="mt-4 pt-3 border-t border-[#00D4FF]/10 bg-[#050B18]/60 p-3 rounded-xl space-y-2.5 text-left">
-                                <span className="text-[9px] font-mono text-[#00D4FF] uppercase tracking-wider block font-bold">
-                                  Configure Secret Key
-                                </span>
-                                <div className="space-y-2">
-                                  <input
-                                    type="text"
-                                    placeholder="SECRET_KEY_NAME"
-                                    value={inlineSecretKey}
-                                    onChange={(e) => setInlineSecretKey(e.target.value.toUpperCase())}
-                                    className="w-full bg-[#050B18] border border-[#00D4FF]/10 rounded-lg px-2.5 py-1 text-[10px] font-mono text-white outline-none focus:border-[#00D4FF] placeholder:text-[#4A6080]"
-                                  />
-                                  <input
-                                    type="password"
-                                    placeholder="Secret value"
-                                    value={inlineSecretValue}
-                                    onChange={(e) => setInlineSecretValue(e.target.value)}
-                                    className="w-full bg-[#050B18] border border-[#00D4FF]/10 rounded-lg px-2.5 py-1 text-[10px] font-mono text-white outline-none focus:border-[#00D4FF] placeholder:text-[#4A6080]"
-                                  />
-                                  <div className="flex items-center gap-2 pt-1">
-                                    <button
-                                      type="button"
-                                      disabled={isSavingSecret || !inlineSecretKey.trim() || !inlineSecretValue.trim()}
-                                      onClick={() => handleSaveInlineSecret(project.repo_name)}
-                                      className="flex-1 py-1.5 rounded-lg bg-[#00D4FF] text-[#050B18] text-[9px] font-mono font-bold uppercase hover:bg-[#00D4FF]/80 transition-all cursor-pointer disabled:opacity-40"
-                                    >
-                                      {isSavingSecret ? 'Saving...' : 'Save Secret'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setInlineSecretKey('');
-                                        setInlineSecretValue('');
-                                        setActiveSecretsProject(null);
-                                      }}
-                                      className="px-2.5 py-1.5 rounded-lg border border-[#4A6080]/20 text-[#4A6080] text-[9px] font-mono font-bold uppercase hover:text-white transition-all cursor-pointer"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Quick Controls Actions bar */}
-                            {!isSecretsOpen && (
-                              <div className="space-y-3 pt-4 border-t border-[#00D4FF]/5 mt-4">
-                                <div className="flex items-center gap-2">
-                                  {isOnline ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleStopBot(project.repo_name)}
-                                      disabled={isLoadingAction}
-                                      className="flex-1 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
-                                    >
-                                      {isLoadingAction ? (
-                                        <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
-                                      ) : (
-                                        <>
-                                          <Power className="w-3 h-3" />
-                                          Stop Node
-                                        </>
-                                      )}
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleStartBot(project.repo_name)}
-                                      disabled={isLoadingAction}
-                                      className="flex-1 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 font-mono text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
-                                    >
-                                      {isLoadingAction ? (
-                                        <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
-                                      ) : (
-                                        <>
-                                          <Play className="w-3 h-3 fill-current" />
-                                          Start Node
-                                        </>
-                                      )}
-                                    </button>
-                                  )}
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRestartBot(project.repo_name)}
-                                    disabled={isLoadingAction}
-                                    className="p-2 rounded-xl border border-[#00D4FF]/25 bg-[#00D4FF]/5 text-[#00D4FF] hover:bg-[#00D4FF]/15 transition-all cursor-pointer disabled:opacity-40"
-                                    title="Restart Workflow"
-                                  >
-                                    <RotateCw className={`w-3.5 h-3.5 ${isLoadingAction ? 'animate-spin' : ''}`} />
-                                  </button>
-                                </div>
-
-                                <div className="flex items-center justify-between gap-2 pt-1 text-[10px] font-mono text-[#4A6080]">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      audio.playClick();
-                                      setActiveSecretsProject(project.repo_name);
-                                    }}
-                                    className="hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
-                                  >
-                                    <Key className="w-3 h-3" />
-                                    Secrets
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      audio.playClick();
-                                      setActiveLogsProject(project.repo_name);
-                                    }}
-                                    className="hover:text-[#00D4FF] transition-colors flex items-center gap-1 cursor-pointer"
-                                  >
-                                    <Terminal className="w-3 h-3" />
-                                    Live Logs
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteProject(project.repo_name)}
-                                    className="hover:text-rose-400 transition-colors cursor-pointer"
-                                    title="Untrack Repository"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                      .map((project, idx) => (
+                        <ProjectCard
+                          key={project.id}
+                          project={project}
+                          botActionLoading={botActionLoading}
+                          activeSecretsProject={activeSecretsProject}
+                          setActiveSecretsProject={setActiveSecretsProject}
+                          setActiveLogsProject={setActiveLogsProject}
+                          handleStopBot={handleStopBot}
+                          handleStartBot={handleStartBot}
+                          handleRestartBot={handleRestartBot}
+                          handleDeleteProject={handleDeleteProject}
+                          handleSaveInlineSecret={handleSaveInlineSecret}
+                          inlineSecretKey={inlineSecretKey}
+                          setInlineSecretKey={setInlineSecretKey}
+                          inlineSecretValue={inlineSecretValue}
+                          setInlineSecretValue={setInlineSecretValue}
+                          isSavingSecret={isSavingSecret}
+                          index={idx}
+                        />
+                      ))}
                   </div>
                 </div>
               </motion.div>

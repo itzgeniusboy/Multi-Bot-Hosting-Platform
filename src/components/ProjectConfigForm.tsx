@@ -158,17 +158,18 @@ export default function ProjectConfigForm({
             {envVars.length > 0 && (
               <div className="space-y-2 mb-4">
                 {envVars.map((item, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    <div className="flex-1 font-mono text-[11px] bg-[#050B18] border border-[#00D4FF]/5 rounded-lg px-3 py-2 text-[#00D4FF] truncate">
+                  <div key={index} className="relative flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-[#050B18]/40 border border-[#00D4FF]/10 rounded-xl pr-12">
+                    <div className="w-full sm:flex-1 font-mono text-[11px] bg-[#050B18] border border-[#00D4FF]/5 rounded-lg px-3 py-2 text-[#00D4FF] truncate">
                       {item.key}
                     </div>
-                    <div className="flex-1 font-mono text-[11px] bg-[#050B18]/60 border border-[#00D4FF]/10 rounded-lg px-3 py-2 text-[#F0F6FF] truncate">
+                    <div className="w-full sm:flex-1 font-mono text-[11px] bg-[#050B18]/60 border border-[#00D4FF]/10 rounded-lg px-3 py-2 text-[#F0F6FF] truncate">
                       ••••••••••••••••
                     </div>
                     <button
                       type="button"
                       onClick={() => handleRemoveSecret(index)}
-                      className="p-2 text-rose-400/60 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all cursor-pointer"
+                      className="absolute top-1/2 -translate-y-1/2 right-3 w-8 h-8 flex items-center justify-center text-rose-500 hover:text-rose-400 bg-transparent hover:bg-rose-500/10 rounded-lg transition-all cursor-pointer border border-transparent"
+                      title="Remove secret"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -188,7 +189,7 @@ export default function ProjectConfigForm({
               />
               <input
                 type="password"
-                placeholder="secret_value"
+                placeholder="Enter secret value"
                 value={newValue}
                 onChange={(e) => setNewValue(e.target.value)}
                 className="w-full sm:flex-1 bg-[#050B18] border border-[#00D4FF]/10 rounded-lg px-3 py-2 font-mono text-[11px] text-white outline-none focus:border-[#00D4FF] transition-all placeholder:text-[#4A6080]"

@@ -36,7 +36,7 @@ export default function OAuthCallback() {
 
       try {
         // Exchange code with our secure backend
-        const response = await fetch(`/api/callback?code=${code}`, {
+        const response = await fetch(new URL(`/api/callback?code=${code}`, window.location.href).href, {
           method: 'GET',
           headers: {
             'Accept': 'application/json',

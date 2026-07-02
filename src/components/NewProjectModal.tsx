@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, ArrowLeft, GitBranch, Settings, Terminal, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import RepoSelector from './RepoSelector';
 import ProjectConfigForm from './ProjectConfigForm';
 import DeploymentConsole from './DeploymentConsole';
 import ProjectLiveView from './ProjectLiveView';
+import { use3DTilt } from '../hooks/use3DTilt';
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -38,8 +39,22 @@ export default function NewProjectModal({
   const [deployResult, setDeployResult] = useState<any>(null);
   const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
 
+  const tiltRef = use3DTilt(true);
+
+  // Lock body scroll when wizard is active
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   // Sync initialData for duplication/clone configs
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       if (initialData) {
         setSelectedRepo(initialData.repoName);
@@ -101,6 +116,7 @@ export default function NewProjectModal({
 
       {/* Main glassmorphic dialog card */}
       <motion.div
+        ref={tiltRef}
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -150,7 +166,11 @@ export default function NewProjectModal({
               (step === 'live' && i < 3);
 
             return (
-              <div key={st.key} className="flex items-center gap-2 shrink-0">
+              <div 
+                key={st.key} 
+                className="flex items-center gap-2 shrink-0 animate-step-slide"
+                style={{ animationDelay: `${i * 80}ms` }}
+              >
                 <div className={`flex items-center gap-1.5 text-[10px] font-mono font-bold tracking-wider ${
                   isActive
                     ? 'text-[#00D4FF]'
