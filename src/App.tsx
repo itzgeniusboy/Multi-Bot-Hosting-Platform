@@ -123,6 +123,11 @@ function AddProjectCard({ onClick }: AddProjectCardProps) {
   );
 }
 
+const stripEmojis = (text: string | null | undefined): string => {
+  if (!text) return '';
+  return text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{27BF}]|[\u{1F1E6}-\u{1F1FF}]|[\u{1F900}-\u{1F9FF}]/gu, '').trim();
+};
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
@@ -693,29 +698,9 @@ export default function App() {
                         )}
                       </div>
                       <p className="text-xs text-[#4A6080] font-sans">
-                        {gitHubUser?.bio || gitHubUser?.html_url || 'Active developer session synchronized.'}
+                        {gitHubUser?.bio ? stripEmojis(gitHubUser.bio) : (gitHubUser?.html_url || 'Active developer session synchronized.')}
                       </p>
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={handleRefreshRepos}
-                      disabled={isFetchingRepos || isFetchingUser}
-                      className="p-2.5 rounded-xl border border-[#00D4FF]/10 bg-[#050B18]/60 text-[#4A6080] hover:text-[#00D4FF] hover:border-[#00D4FF]/35 transition-all cursor-pointer disabled:opacity-40"
-                      title="Reload integrations"
-                    >
-                      <RefreshCw className={`w-4 h-4 ${(isFetchingRepos || isFetchingUser) ? 'animate-spin text-[#00D4FF]' : ''}`} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleDisconnectClick}
-                      disabled={isDisconnecting}
-                      className="px-4 py-2 rounded-xl border border-rose-500/20 bg-rose-500/5 text-rose-400 hover:bg-rose-500/10 transition-all font-mono text-[10px] uppercase tracking-wider cursor-pointer font-bold disabled:opacity-40"
-                    >
-                      {isDisconnecting ? 'Disconnecting...' : 'Disconnect Node'}
-                    </button>
                   </div>
                 </div>
 
